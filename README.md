@@ -1,29 +1,21 @@
-# Pool Pilot Dashboard
+# Pool Pilot Dashboard v0.4
 
-Carte Lovelace inspirée de Flipr pour Home Assistant.
+Carte Lovelace HACS inspirée de l'application Flipr.
 
-## v0.3.0
+## Nouveautés v0.4
 
-Correction de l'éditeur graphique : les sélecteurs d'entités sont maintenant correctement passés à `ha-form`.
+- Jauge pH en 3/4 de cercle avec point blanc.
+- Jauge chlore/RedOx type compteur de vitesse corrigée.
+- Support Flipr Local : dernière mesure + bouton déclencher/récupérer une mesure.
+- Équipements optionnels dans l'éditeur visuel : filtration, PAC, électrolyseur, nage à contre-courant.
+- Les champs d'entités apparaissent seulement quand l'équipement est coché.
+- Onglet Analyse avec synthèse, onglet Contrôle avec commandes détaillées.
+- Bandeau d'alerte affiché seulement si recommandations ou état chimie/baignade non OK.
 
-## Installation HACS
-
-Ajoute ce dépôt en type **Tableau de bord** dans HACS.
-
-Ressource attendue :
+## Ressource
 
 ```text
 /hacsfiles/pool-pilot-dashboard/pool-pilot-dashboard-card.js
 ```
 
-Type : **Module JavaScript**.
-
-## Utilisation
-
-Ajoute une carte **Pool Pilot Dashboard** depuis l'interface graphique, puis choisis les entités dans l'éditeur visuel.
-
-En secours :
-
-```yaml
-type: custom:pool-pilot-dashboard
-```
+Type : Module JavaScript.
