@@ -1,0 +1,185 @@
+title: Piscine
+views:
+  - title: Piscine
+    path: piscine
+    icon: mdi:pool
+    type: panel
+    cards:
+      - type: custom:mod-card
+        card_mod:
+          style: |
+            ha-card {
+              min-height: 100vh;
+              background: linear-gradient(180deg, #eef8fc 0%, #eef8fc 58%, #24c9bd 59%, #39a8dc 85%, #ff8a4a 85%, #ff8a4a 90%, #302845 90%);
+              border-radius: 0;
+              box-shadow: none;
+              padding: 18px 18px 0 18px;
+            }
+        card:
+          type: vertical-stack
+          cards:
+            - type: custom:mushroom-title-card
+              title: Quintal - Piscine
+              subtitle: Pool Pilot
+              alignment: center
+
+            - type: horizontal-stack
+              cards:
+                - type: custom:mushroom-template-card
+                  primary: Analyse
+                  icon: mdi:leaf
+                  layout: horizontal
+                  tap_action:
+                    action: navigate
+                    navigation_path: /lovelace/piscine
+                  card_mod:
+                    style: |
+                      ha-card { background: #11182b; color: white; border-radius: 18px 0 0 18px; }
+                - type: custom:mushroom-template-card
+                  primary: Contrôle
+                  icon: mdi:checkbox-blank-outline
+                  layout: horizontal
+                  tap_action:
+                    action: navigate
+                    navigation_path: /lovelace/piscine-controle
+                  card_mod:
+                    style: |
+                      ha-card { background: #a9b3c1; color: white; border-radius: 0 18px 18px 0; }
+
+            - type: horizontal-stack
+              cards:
+                - type: custom:mushroom-template-card
+                  primary: air
+                  secondary: "{{ states('sensor.temperature_exterieure') }}°C"
+                  icon: mdi:weather-partly-cloudy
+                  card_mod:
+                    style: |
+                      ha-card { background: transparent; box-shadow: none; --card-primary-font-size: 24px; --card-secondary-font-size: 44px; }
+                - type: custom:mushroom-template-card
+                  primary: UV
+                  secondary: "{{ states('sensor.uv_index') }}"
+                  icon: mdi:weather-sunny
+                  card_mod:
+                    style: |
+                      ha-card { background: transparent; box-shadow: none; --card-primary-font-size: 18px; --card-secondary-font-size: 28px; }
+
+            - type: custom:button-card
+              entity: switch.pompe_filtration
+              name: Pompe à filtration
+              icon: mdi:pool
+              show_state: false
+              tap_action:
+                action: toggle
+              styles:
+                card:
+                  - border-radius: 20px
+                  - padding: 18px
+                  - height: 110px
+                  - background: white
+                grid:
+                  - grid-template-areas: 'i n power gear' 'i s power gear'
+                  - grid-template-columns: 70px 1fr 58px 58px
+                icon:
+                  - color: '#11182b'
+                  - width: 54px
+                name:
+                  - justify-self: start
+                  - font-size: 18px
+                  - color: '#11182b'
+                custom_fields:
+                  power:
+                    - border-radius: 50%
+                    - width: 46px
+                    - height: 46px
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - background: "[[[ return entity.state === 'on' ? '#1ed760' : '#dfe5ec'; ]]]"
+                    - color: white
+                  gear:
+                    - border-radius: 50%
+                    - width: 46px
+                    - height: 46px
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - background: '#f2f4f7'
+                    - color: '#8290a3'
+              custom_fields:
+                power: |
+                  [[[ return '<ha-icon icon="mdi:power" style="width:28px;height:28px"></ha-icon>'; ]]]
+                gear: |
+                  [[[ return '<ha-icon icon="mdi:cog-outline" style="width:28px;height:28px"></ha-icon>'; ]]]
+
+            - type: custom:mushroom-template-card
+              primary: Dernière mesure
+              secondary: "{{ states('sensor.piscine_derniere_mesure') | default('Mesure Flipr') }}"
+              icon: mdi:trophy
+              icon_color: pink
+              card_mod:
+                style: |
+                  ha-card { margin-top: 120px; border-radius: 16px; background: rgba(255,255,255,0.82); }
+
+            - type: horizontal-stack
+              cards:
+                - type: custom:mushroom-template-card
+                  primary: eau
+                  secondary: "{{ states('sensor.piscine_temperature_eau') }}°C"
+                  icon: mdi:thermometer-water
+                  card_mod:
+                    style: |
+                      ha-card { background: transparent; box-shadow: none; color: white; --card-primary-font-size: 24px; --card-secondary-font-size: 44px; }
+                - type: custom:mushroom-template-card
+                  primary: pH
+                  secondary: "{{ states('sensor.piscine_ph') }}"
+                  icon: mdi:ph
+                  card_mod:
+                    style: |
+                      ha-card { background: transparent; box-shadow: none; color: white; --card-primary-font-size: 24px; --card-secondary-font-size: 44px; }
+                - type: custom:mushroom-template-card
+                  primary: Chlore
+                  secondary: "{{ states('sensor.piscine_chlore_libre') | default(states('sensor.piscine_redox')) }}"
+                  icon: mdi:water-plus
+                  card_mod:
+                    style: |
+                      ha-card { background: transparent; box-shadow: none; color: white; --card-primary-font-size: 24px; --card-secondary-font-size: 32px; }
+
+            - type: custom:mushroom-template-card
+              primary: >-
+                {% set ph = states('sensor.piscine_ph') | float(0) %}
+                {% if ph > 7.5 %}Alerte en cours : pH trop haut{% elif ph < 7.1 %}Alerte en cours : pH trop bas{% else %}Eau équilibrée{% endif %}
+              icon: mdi:alert-outline
+              icon_color: white
+              card_mod:
+                style: |
+                  ha-card { background: transparent; box-shadow: none; color: white; font-weight: 700; }
+
+            - type: horizontal-stack
+              cards:
+                - type: custom:mushroom-template-card
+                  primary: Menu
+                  icon: mdi:waves
+                  tap_action:
+                    action: more-info
+                    entity: sensor.piscine_actions_recommandees
+                  card_mod:
+                    style: |
+                      ha-card { background: transparent; box-shadow: none; color: white; }
+                - type: custom:mushroom-template-card
+                  primary: Pool Pilot
+                  icon: mdi:shark-fin
+                  tap_action:
+                    action: navigate
+                    navigation_path: /config/integrations/integration/pool_pilot
+                  card_mod:
+                    style: |
+                      ha-card { background: transparent; box-shadow: none; color: white; }
+                - type: custom:mushroom-template-card
+                  primary: Produits
+                  icon: mdi:bucket-outline
+                  tap_action:
+                    action: more-info
+                    entity: sensor.piscine_actions_recommandees
+                  card_mod:
+                    style: |
+                      ha-card { background: transparent; box-shadow: none; color: white; }
