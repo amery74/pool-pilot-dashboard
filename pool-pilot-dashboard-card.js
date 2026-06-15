@@ -320,15 +320,22 @@ class PoolPilotDashboardEditor extends HTMLElement {
       </style>
       <div class="editor">
         <p class="hint">Configure les entités directement ici. Les champs vides seront simplement masqués ou affichés avec “—”.</p>
-        <ha-form
-          .hass=${this._hass}
-          .data=${this.config}
-          .schema=${this._schema()}
-          .computeLabel=${(schema) => this._labels()[schema.name] || schema.name}
-        ></ha-form>
+        <ha-form></ha-form>
       </div>
     `;
-    this.shadowRoot.querySelector("ha-form")?.addEventListener("value-changed", (ev) => {
+    const form = this.shadowRoot.querySelector("ha-form");
+    if (!form) return;
+
+    // Important: avec un Web Component vanilla, les propriétés de ha-form
+    // doivent être assignées en JavaScript. La syntaxe .hass=${...}
+    // ne fonctionne que dans Lit et empêchait l'éditeur graphique d'afficher
+    // les sélecteurs d'entités dans Home Assistant.
+    form.hass = this._hass;
+    form.data = this.config;
+    form.schema = this._schema();
+    form.computeLabel = (schema) => this._labels()[schema.name] || schema.name;
+
+    form.addEventListener("value-changed", (ev) => {
       this.config = ev.detail.value;
       this.dispatchEvent(new CustomEvent("config-changed", {
         detail: { config: this.config }, bubbles: true, composed: true,
@@ -347,3 +354,5 @@ window.customCards.push({
   description: "Dashboard piscine inspiré de Flipr avec configuration graphique.",
   preview: true,
 });
+
+console.info("%cPOOL-PILOT-DASHBOARD-CARD v0.3.0", "color:#2ed5c7;font-weight:bold");
