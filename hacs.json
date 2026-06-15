@@ -1,6 +1,6 @@
 {
   "name": "Pool Pilot Dashboard",
-  "content_in_root": false,
+  "content_in_root": true,
   "filename": "pool-pilot-dashboard-card.js",
   "render_readme": true
 }
