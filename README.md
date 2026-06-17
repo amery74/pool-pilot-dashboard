@@ -1,19 +1,17 @@
-# Pool Pilot Dashboard v0.6.0
+# Pool Pilot Dashboard v0.7
 
-Carte Lovelace HACS inspirée de Flipr pour Pool Pilot.
+Carte Lovelace HACS inspirée de Flipr.
 
-## Nouveautés v0.6
+## Changements v0.7
 
-- Page **Pool House** pour afficher les stocks de produits chimiques.
-- Champ d'éditeur visuel `Produits Pool House` : entrer les entités de stock séparées par des virgules.
-- Corrections v0.5 incluses :
-  - bandeau alerte masqué quand tout va bien ;
-  - “Plus tard” masque l’alerte 6 h ;
-  - “C’est fait” valide l’action et masque l’alerte 24 h ;
-  - jauge pH avec point blanc et trait noir synchronisés ;
-  - jauge chlore/RedOx horizontale ;
-  - filtration ON/OFF + Auto recommandé ;
-  - PAC mode chauffage/auto/refroidissement + consigne.
+- Retour au design global type Flipr plein écran.
+- Correction de la jauge pH : l’arc noir suit maintenant le point blanc.
+- Suppression du trait noir parasite.
+- Jauge Chlore/RedOx refaite comme compteur analogique Flipr.
+- Ajout d’une vraie entrée **Pool House** dans le menu du bas et le menu latéral.
+- Page Pool House avec liste produits, stock, boutons édition/suppression visuels.
+- Page d’ajout produit avec appel au service `pool_pilot.add_product`.
+- Contrôle filtration avec deux boutons : marche/arrêt manuel et mode automatique recommandé.
 
 ## Ressource
 
@@ -22,22 +20,3 @@ Carte Lovelace HACS inspirée de Flipr pour Pool Pilot.
 ```
 
 Type : Module JavaScript.
-
-## Exemple YAML minimal
-
-```yaml
-type: custom:pool-pilot-dashboard
-title: Piscine
-water_temp_entity: sensor.flipr_temperature
-ph_entity: sensor.flipr_ph
-orp_entity: sensor.flipr_orp
-last_measure_entity: sensor.flipr_last_measure
-trigger_measure_entity: button.flipr_request_measure
-enable_filter_pump: true
-pump_entity: switch.pompe_piscine
-pump_auto_entity: button.pool_pilot_filtration_auto
-enable_heatpump: true
-heatpump_entity: climate.pac_piscine
-enable_pool_house: true
-product_entities: sensor.pool_pilot_ph_moins_stock, sensor.pool_pilot_chlore_galets_stock
-```
