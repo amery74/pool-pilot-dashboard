@@ -1,9 +1,18 @@
 type: custom:pool-pilot-dashboard
-title: Piscine
-water_temp_entity: sensor.piscine_temperature_eau
+name: Piscine
+water_temperature_entity: sensor.piscine_temperature_eau
+air_temperature_entity: sensor.temperature_exterieure
 ph_entity: sensor.piscine_ph
 chlorine_entity: sensor.piscine_chlore_libre
-enable_filter_pump: true
-pump_entity: switch.pompe_filtration
-pump_auto_entity: switch.piscine_filtration_automatique
-filtration_duration_entity: sensor.piscine_duree_filtration_recommandee
+orp_entity: sensor.piscine_redox
+uv_entity: sensor.piscine_uv
+weather_entity: weather.maison
+# Intégration météo type Météo-France / vigilance : renseigner les entités si disponibles
+weather_alert_wind_entity: sensor.vigilance_meteo_france_vent_violent
+weather_alert_thunderstorm_entity: sensor.vigilance_meteo_france_orages
+weather_alert_rain_flood_entity: sensor.vigilance_meteo_france_pluie_inondation
+weather_alert_heatwave_entity: sensor.vigilance_meteo_france_canicule
+weather_alert_snow_ice_entity: sensor.vigilance_meteo_france_neige_verglas
+chemistry_state_entity: sensor.piscine_etat_chimie
+swimming_state_entity: sensor.piscine_etat_baignade
+pool_alert_entity: sensor.piscine_alerte_pool_pilot
