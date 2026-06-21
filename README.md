@@ -1,4 +1,4 @@
-# Pool Pilot Dashboard v0.16
+# Pool Pilot Dashboard v0.17
 
 Dashboard compatible avec Pool Pilot v0.3.0.
 
@@ -11,4 +11,4 @@ Dashboard compatible avec Pool Pilot v0.3.0.
 
 ### Pool House
 
-Cette build v0.16 ajoute l’édition/suppression Pool House : la croix bleue appelle `pool_pilot.remove_product`, le stylo ouvre le formulaire pré-rempli et sauvegarde avec `pool_pilot.update_product`.
+Cette build v0.17 ajoute l’édition/suppression Pool House : la croix bleue appelle `pool_pilot.remove_product`, le stylo ouvre le formulaire pré-rempli et sauvegarde avec `pool_pilot.update_product`.
