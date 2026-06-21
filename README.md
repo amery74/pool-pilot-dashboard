@@ -29,3 +29,10 @@ Ressource attendue :
 url: /hacsfiles/pool-pilot-dashboard-card.js
  type: module
 ```
+
+
+## v0.28 - Vigilance Météo-France
+
+La carte utilise maintenant une seule entité de vigilance Météo-France, par exemple `sensor.74_weather_alert`.
+Elle lit les attributs suivants : `Canicule`, `Vent violent`, `Pluie-inondation`, `Orages`, `Neige-verglas`.
+Seuls les niveaux `Jaune`, `Orange` et `Rouge` affichent une pastille. Le niveau `Vert` est ignoré.
