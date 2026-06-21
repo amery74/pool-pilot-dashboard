@@ -1,5 +1,24 @@
-# Pool Pilot Dashboard v0.18
+# Pool Pilot Dashboard v0.20
 
-Correction du retour visuel du bouton filtration auto : le bouton passe au vert quand le switch/status Pool Pilot indique que la planification automatique est active.
+Version centrée sur le menu, sans modifier l'interface principale.
 
-Dans l’éditeur, renseigner de préférence `Interrupteur état auto planifié Pool Pilot` avec le switch `Filtration auto planifiée`.
+## Menu
+- Carnet d'entretien : conservé pour la future timeline
+- Pool House : gestion produits
+- Mode Expert : données brutes + test bandelette + diagnostic
+- Paramètres : conservé pour plus tard
+
+## Mode Expert
+Le formulaire Test bandelette envoie les valeurs à `pool_pilot.update_strip_test` :
+- pH
+- TAC
+- TH
+- Stabilisant
+- Chlore libre
+- Chlore total
+- Température
+
+Configure dans l'éditeur visuel :
+- `Données brutes Pool Pilot` -> capteur `raw_measurements`
+- `Test bandelette Pool Pilot` -> capteur `strip_test`
+- `Entité météo` -> ton `weather.xxx`
