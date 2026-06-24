@@ -1,0 +1,6 @@
+v0.30.10
+
+Températures :
+- la flèche fixe à côté de la température d'air est remplacée par une tendance réelle : ↑, ↓ ou → ;
+- ajout d'une flèche de tendance sur la température de l'eau ;
+- flèches simples, sans emoji.
