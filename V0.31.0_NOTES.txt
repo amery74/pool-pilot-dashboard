@@ -1,0 +1,8 @@
+v0.31.0
+
+Carnet d'entretien :
+- ajout d'un écran Carnet d'entretien accessible depuis le menu ;
+- affichage en frise chronologique inspirée de Flipr ;
+- ajout manuel d'une entrée avec catégories ;
+- lecture du capteur Pool Pilot maintenance_journal ;
+- service pool_pilot.add_journal_entry utilisé pour enregistrer les entrées.
