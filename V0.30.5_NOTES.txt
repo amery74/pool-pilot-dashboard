@@ -1,0 +1,7 @@
+v0.30.5
+
+Correction structurelle du scroll Mode Expert :
+- le panneau plein écran ne scrolle plus directement ;
+- ajout d'un conteneur interne `.expert-scroll` dédié au défilement ;
+- conservation du scroll dans `sessionStorage` ;
+- évite les remontées provoquées par iOS/Home Assistant sur les éléments fixed.
