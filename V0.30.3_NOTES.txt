@@ -1,0 +1,7 @@
+v0.30.3 - Dashboard
+
+Correction agressive du Mode Expert :
+- aucun rerender automatique tant qu'un panneau plein écran est ouvert ;
+- le Mode Expert ne se reconstruit plus à chaque mise à jour Home Assistant ;
+- conservation du scroll pendant la consultation et la saisie ;
+- réduction du scroll chaining iOS/Lovelace.
