@@ -22,3 +22,11 @@ Dans la carte :
 - Filtration auto intelligente Pool Pilot : switch Pool Pilot auto
 - Durée filtration recommandée : sensor Pool Pilot durée filtration recommandée
 
+
+
+## v0.30.1
+
+- Le bouton Auto de la carte pilote maintenant en priorité `switch.piscine_filtration_auto_intelligente`.
+- Si l'ancien champ `pump_auto_entity` pointe vers `switch.piscine_filtration_automatique_pool_pilot`, la carte détecte automatiquement le nouveau switch intelligent correspondant.
+- Ajout d'un champ optionnel `auto_schedule_entity` dans l'éditeur visuel.
+- Suppression de la priorité donnée à l'état local du navigateur pour éviter un bouton vert alors que le moteur Auto Intelligent est désactivé.
