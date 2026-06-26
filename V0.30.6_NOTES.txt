@@ -1,8 +1,0 @@
-v0.30.6
-
-Ajout Mode Expert :
-- ajout d'un bloc "Test bandelette — dernier test" sous le formulaire ;
-- affichage des valeurs pH, chlore libre, chlore total, stabilisant, TAC et TH ;
-- barres colorées avec zone bleue correspondant à l'intervalle recommandé ;
-- marqueur rond mobile selon la valeur du dernier test ;
-- affichage automatique des conversions TAC/TH ppm ↔ °f.

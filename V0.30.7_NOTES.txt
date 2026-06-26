@@ -1,7 +1,0 @@
-v0.30.7
-
-Correction test bandelette :
-- les valeurs validées sont affichées immédiatement sur les échelles ;
-- stockage local de secours côté carte ;
-- lecture depuis l'entité strip_test_entity si Pool Pilot expose les attributs ;
-- mapping robuste des noms de champs.

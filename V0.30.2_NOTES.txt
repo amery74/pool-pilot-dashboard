@@ -1,9 +1,0 @@
-v0.30.2 - Dashboard
-
-Corrections :
-- Mode Expert : l'affichage "Filtration auto" n'affiche plus un timestamp de bouton, mais l'état lisible de l'Auto intelligent.
-- Mode Expert : meilleure lecture de sensor.piscine_filtration_intelligente / switch.piscine_filtration_auto_intelligente.
-- Mode Expert : protection contre les remontées automatiques pendant le scroll et la saisie.
-- Test bandelette : conversion automatique TAC/TH entre ppm et degrés français.
-  Règle utilisée : 1 °f = 10 ppm.
-- Test bandelette : texte des champs forcé en noir sur mobile.

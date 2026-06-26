@@ -1,7 +1,0 @@
-v0.30.8
-
-Correction Test bandelette / Pool Pilot :
-- après validation, la carte force la mise à jour des entités Pool Pilot ;
-- lecture prioritaire des nouvelles entités individuelles bandelette ;
-- fallback conservé sur l'entité synthèse Test bandelette et le stockage local ;
-- ajout des champs optionnels dans l'éditeur visuel pour mapper les entités bandelette.

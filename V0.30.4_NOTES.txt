@@ -1,6 +1,0 @@
-v0.30.4
-
-Correction supplémentaire du scroll Mode Expert :
-- la récupération async météo ne déclenche plus de render si un panneau est ouvert ;
-- les rendus différés après actions PAC/pompe ne touchent plus le panneau ouvert ;
-- renforcement du conteneur scroll du panneau.
