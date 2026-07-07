@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.1
+
+### Fixed
+- Fixed Dashboard render crash when the main temperature value is empty, unavailable or non-numeric.
+- Fixed `TypeError: this._fmt is not a function` reported on Firefox/Windows and Firefox/Linux.
+- Prevented the Lovelace card editor from refreshing continuously due to this rendering error.
+
 ## v1.0.0
 
 ### Stable release

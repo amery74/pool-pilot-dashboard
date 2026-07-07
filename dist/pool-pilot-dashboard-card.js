@@ -7,7 +7,8 @@ class PoolPilotDashboardCard extends HTMLElement{
  _state(e){return e&&this._hass?.states?.[e]?this._hass.states[e]:undefined}
  _setOpt(e,obj,ms=10000){if(!e)return;this._opt=this._opt||{};this._opt[e]={...(this._opt[e]||{}),...obj,_until:Date.now()+ms}}
  _optState(e){const o=this._opt?.[e];return o&&o._until>Date.now()?o:null}
-  _fmtMainTemp(v){const n=parseFloat(String(v??'').replace(',','.').replace(/[^0-9+\-.]/g,''));if(Number.isFinite(n))return n.toFixed(1).replace('.',',');return this._fmt(v)}
+  _fmtMainTemp(v){const n=parseFloat(String(v??'').replace(',','.').replace(/[^0-9+\-.]/g,''));if(Number.isFinite(n))return n.toFixed(1).replace('.',',');return String(v??'—')}
+ _fmt(v,f='—'){if(v===undefined||v===null)return f;const s=String(v).trim();return (!s||['unknown','unavailable','none','None'].includes(s))?f:s}
  _value(e,f='—'){const o=this._optState(e);if(o&&o.state!==undefined)return o.state;const s=this._state(e);if(!s||['unknown','unavailable','none','None',''].includes(String(s.state)))return f;return s.state}
  _num(e){const n=parseFloat(String(this._value(e,'')).replace(',','.'));return Number.isFinite(n)?n:null}
  _unit(e){return this._state(e)?.attributes?.unit_of_measurement||''}
