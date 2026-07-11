@@ -120,3 +120,13 @@ Si la carte ne se met pas à jour après installation : vider le cache du naviga
 ## Licence
 
 Carte Lovelace personnelle pour Home Assistant et Pool Pilot.
+
+
+## Nouveautés v1.1.0 bêta
+
+- Valeur numérique du chlore libre (`X,X ppm`) ou de l’ORP (`XXX mV`) sous la jauge.
+- Sélecteur d’affichage Chlore / ORP dans l’éditeur visuel.
+- Éclairage et deux contacts auxiliaires facultatifs, configurables uniquement dans la carte.
+- Les bandeaux d’alerte ne sont plus affichés sans recommandation exploitable.
+- Les champs **Lancer une mesure** et **Dernière mesure** restent facultatifs et dépendent des entités exposées par l’appareil.
+
