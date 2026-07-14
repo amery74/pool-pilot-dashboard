@@ -130,3 +130,36 @@ Carte Lovelace personnelle pour Home Assistant et Pool Pilot.
 - Les bandeaux d’alerte ne sont plus affichés sans recommandation exploitable.
 - Les champs **Lancer une mesure** et **Dernière mesure** restent facultatifs et dépendent des entités exposées par l’appareil.
 
+
+
+## Dépannage HACS
+
+Après l’installation, HACS place physiquement les fichiers dans :
+
+```text
+/config/www/community/pool-pilot-dashboard/
+```
+
+Dans Home Assistant, ils sont servis par l’URL virtuelle :
+
+```text
+/hacsfiles/pool-pilot-dashboard/pool-pilot-dashboard-card.js
+```
+
+Ces deux chemins désignent donc le même fichier.
+
+En cas d’erreur **Custom element doesn't exist: pool-pilot-dashboard-card** :
+
+1. Ouvrez **Paramètres → Tableaux de bord → Ressources**.
+2. Vérifiez la présence de :
+   `/hacsfiles/pool-pilot-dashboard/pool-pilot-dashboard-card.js`
+3. Le type doit être **Module JavaScript**.
+4. Si la ressource manque, ajoutez-la manuellement.
+5. Rechargez complètement le navigateur ou l’application Home Assistant.
+
+Le nom correct de la carte est :
+
+```yaml
+type: custom:pool-pilot-dashboard-card
+```
+

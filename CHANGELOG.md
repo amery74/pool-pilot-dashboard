@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.1
+
+### Fixed
+- pH and chlorine/ORP gauges now remain perfectly aligned.
+- The numeric ppm/mV value no longer shifts the right gauge downward.
+- Improved HACS resource troubleshooting documentation.
+- Confirmed the HACS package filename and root-content configuration.
+
+
 ## v1.1.0-beta.1
 
 ### Added
