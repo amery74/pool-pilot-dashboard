@@ -1,212 +1,3362 @@
-class PoolPilotDashboardCard extends HTMLElement{
- static getConfigElement(){return document.createElement('pool-pilot-dashboard-editor')}
- static getStubConfig(){return{title:'Piscine',show_weather:true,show_weather_alerts:true,show_recommendations:true,enable_filter_pump:true,enable_heatpump:false,enable_electrolyzer:false,electrolyzer_mode:'simple',enable_counter_current:false,enable_pool_house:true,enable_lighting:false,enable_aux1:false,enable_aux2:false,disinfection_mode:'auto'}}
- setConfig(config){this.config={title:'Piscine',show_weather:true,show_weather_alerts:true,show_recommendations:true,enable_filter_pump:true,enable_heatpump:false,enable_electrolyzer:false,electrolyzer_mode:'simple',enable_counter_current:false,enable_pool_house:false,enable_lighting:false,enable_aux1:false,enable_aux2:false,disinfection_mode:'auto',history_default_period:'24h',ph_min:6.8,ph_max:7.8,chlorine_min:0,chlorine_max:5,orp_min:400,orp_max:900,...config};this._tab=this._tab||'analysis';this._panel=this._panel||null;if(!this.shadowRoot)this.attachShadow({mode:'open'})}
- set hass(hass){this._hass=hass;this._ensureWeatherForecast();if(this._panel){const p=this.shadowRoot?.querySelector('.expert-scroll')||this.shadowRoot?.querySelector('.full-sheet');this._panelScroll=p?p.scrollTop:this._panelScroll;if(this._panel==='history')this._scheduleHistoryRefresh();return;}const ae=this.shadowRoot?.activeElement;if(ae&&['INPUT','TEXTAREA','SELECT'].includes(ae.tagName))return;this._renderPreservingScroll()}
- _scrollSnapshot(){const rows=[];let n=this;while(n){if(n.scrollHeight>n.clientHeight+2)rows.push([n,n.scrollTop,n.scrollLeft]);const r=n.getRootNode?.();n=n.parentElement||(r&&r.host)||null}const d=document.scrollingElement;if(d)rows.push([d,d.scrollTop,d.scrollLeft]);return rows}
- _restoreScroll(rows){requestAnimationFrame(()=>requestAnimationFrame(()=>{for(const [n,t,l] of rows||[]){try{n.scrollTop=t;n.scrollLeft=l}catch(e){}}}))}
- _renderPreservingScroll(){const rows=this._scrollSnapshot();this.render();this._restoreScroll(rows)}
- getCardSize(){return 12}
- _state(e){return e&&this._hass?.states?.[e]?this._hass.states[e]:undefined}
- _setOpt(e,obj,ms=10000){if(!e)return;this._opt=this._opt||{};this._opt[e]={...(this._opt[e]||{}),...obj,_until:Date.now()+ms}}
- _optState(e){const o=this._opt?.[e];return o&&o._until>Date.now()?o:null}
-  _fmtMainTemp(v){const n=parseFloat(String(v??'').replace(',','.').replace(/[^0-9+\-.]/g,''));if(Number.isFinite(n))return n.toFixed(1).replace('.',',');return String(v??'—')}
- _fmt(v,f='—'){if(v===undefined||v===null)return f;const s=String(v).trim();return (!s||['unknown','unavailable','none','None'].includes(s))?f:s}
- _value(e,f='—'){const o=this._optState(e);if(o&&o.state!==undefined)return o.state;const s=this._state(e);if(!s||['unknown','unavailable','none','None',''].includes(String(s.state)))return f;return s.state}
- _num(e){const n=parseFloat(String(this._value(e,'')).replace(',','.'));return Number.isFinite(n)?n:null}
- _unit(e){return this._state(e)?.attributes?.unit_of_measurement||''}
- _format(e,f='—'){const v=this._value(e,f),u=this._unit(e);return v===f?v:`${v}${u?' '+u:''}`}
- _domain(e){return String(e||'').split('.')[0]}
- _isOn(e){return ['on','heat','heating','cool','auto','running','active','enabled'].includes(String(this._value(e,'off')).toLowerCase())}
-  _autoEntity(){return ''}
- _autoLegacyEntity(){return (this.config||{}).pump_auto_entity||''}
- _smartFiltrationEntity(){const c=this.config||{};return c.smart_filtration_entity||c.filtration_smart_entity||c.auto_filtration_status_entity||''}
- _autoActive(){const s=this._state(this._smartFiltrationEntity());const a=this._state(this.config.action_summary_entity||this.config.actions_entity);const raw=String(s?.state||a?.attributes?.auto_schedule_status||localStorage.getItem(this._key('auto_active'))||'').toLowerCase();return ['running','waiting','done','on','active','enabled','auto','scheduled','planifié','planifie','programmé','programme','en attente'].some(v=>raw.includes(v))}
- _toFrenchDeg(ppm){const n=parseFloat(String(ppm??'').replace(',','.'));return Number.isFinite(n)?Math.round((n/10)*10)/10:''}
- _fromFrenchDeg(df){const n=parseFloat(String(df??'').replace(',','.'));return Number.isFinite(n)?Math.round((n*10)*10)/10:''}
- _fmtSmartStatus(s){const x=String(s||'').toLowerCase();const map={disabled:'Désactivé',off:'Désactivé',on:'Actif',running:'En cours',waiting:'En attente',waiting_next_day:'En attente demain',done:'Terminé',active:'Actif',scheduled:'Programmé'};return map[x]||s||'—'}
- _safeRender(){if(!this._panel)this.render()}
- _key(s){return `pool-pilot-dashboard:${this.config?.title||'pool'}:${s}`}
- _stripEntityByKey(k){const c=this.config||{};const explicit={ph:c.strip_ph_entity,alkalinity:c.strip_alkalinity_entity,calcium:c.strip_calcium_entity,cya:c.strip_cya_entity,free_chlorine:c.strip_free_chlorine_entity,total_chlorine:c.strip_total_chlorine_entity,temperature:c.strip_temperature_entity}[k];if(explicit)return explicit;const seed=(c.strip_test_entity||c.raw_measurements_entity||c.filtration_duration_entity||'sensor.piscine').replace(/^sensor\./,'');const pool=seed.split('_')[0]||'piscine';const names={ph:['strip_ph','ph_bandelette'],alkalinity:['strip_alkalinity','tac_bandelette'],calcium:['strip_calcium','th_bandelette'],cya:['strip_cya','stabilisant_bandelette'],free_chlorine:['strip_free_chlorine','chlore_libre_bandelette'],total_chlorine:['strip_total_chlorine','chlore_total_bandelette'],temperature:['strip_temperature','temperature_bandelette']}[k]||[];const candidates=[];for(const n of names){candidates.push(`sensor.${pool}_${n}`);candidates.push(`sensor.piscine_${n}`)}return candidates.find(e=>this._state(e))||''}
- _stripEntityValue(k){const e=this._stripEntityByKey(k);if(!e)return null;const n=parseFloat(String(this._value(e,'')).replace(',','.'));return Number.isFinite(n)?n:null}
- _refreshStripEntities(){const ids=[this.config?.strip_test_entity,this.config?.raw_measurements_entity,'sensor.piscine_test_bandelette'].filter(Boolean).filter(e=>this._state(e));const unique=[...new Set(ids)];if(unique.length)this._hass?.callService?.('homeassistant','update_entity',{entity_id:unique}).catch(()=>{})}
- _stripLocalKey(){return this._key('last_strip_test')}
- _getLocalStrip(){try{return JSON.parse(localStorage.getItem(this._stripLocalKey())||'{}')||{}}catch(e){return{}}}
- _setLocalStrip(payload){const data={...payload,datetime:new Date().toLocaleString()};try{localStorage.setItem(this._stripLocalKey(),JSON.stringify(data))}catch(e){}this._lastStripPayload=data}
- _until(k){const t=Number(localStorage.getItem(this._key(k))||0);return Number.isFinite(t)?t:0}
- _suppressed(){return Date.now()<Math.max(this._until('snooze'),this._until('done'))}
- _isSnoozed(){return Date.now()<this._until('snooze')}
- _isDone(){return Date.now()<this._until('done')}
- _clearSnooze(){localStorage.removeItem(this._key('snooze'));this.render()}
- _setSuppress(kind,hours){const ttl=kind==='snooze'?24*365:hours;localStorage.setItem(this._key(kind),String(Date.now()+ttl*3600000));if(kind==='done')this._callConfirm();this._panel=null;this.render()}
- _labelState(v){const m={safe:'Bon',ok:'Bon',good:'Bon',bon:'Bon',normal:'Bon',warning:'Attention',attention:'Attention',high:'Trop Haut',low:'Trop Bas',avoid:'Déconseillée',bad:'Mauvais',danger:'Danger',unknown:'Inconnu',unavailable:'Indisponible'};return m[String(v||'').toLowerCase()]||v||'—'}
- _statusIcon(v){const x=String(v||'').toLowerCase();return ['safe','ok','good','bon','normal'].includes(x)?'<span class="status-bang status-good"><ha-icon icon="mdi:thumb-up-outline"></ha-icon></span>':'<span class="status-bang">!</span>'}
- _qualityClass(v){const x=String(v||'').toLowerCase();if(['safe','ok','good','bon','normal'].includes(x))return'good';if(['warning','attention','high','low'].includes(x))return'warn';if(['avoid','bad','danger'].includes(x))return'bad';return'neutral'}
- _phStatus(v){const n=parseFloat(String(v).replace(',','.'));if(!Number.isFinite(n))return'unknown';if(n<7.0)return'low';if(n>7.4)return'high';return'good'}
- _chlStatus(){const c=this._num(this.config.chlorine_entity);if(c!==null){if(c<1)return'low';if(c>3)return'high';return'good'}const o=this._num(this.config.orp_entity);if(o!==null){if(o<650)return'low';if(o>800)return'high';return'good'}return'unknown'}
- _norm(v){return String(v??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
- _isExplicitAlert(){const c=this.config||{},v=c.alert_entity?this._norm(this._value(c.alert_entity,'')):'';if(!v)return null;if(v.startsWith('aucune')||['ok','bon','normal','ras','rien','false','off','clear'].includes(v))return false;if(['alerte','alert','on','true','danger','urgent','action'].includes(v)||/(alerte|alert|urgent|action|corriger|ajouter|trop haut|trop bas)/.test(v))return true;return null}
- _isVigilanceState(){const c=this.config||{};const chem=c.chemistry_state_entity?this._norm(this._value(c.chemistry_state_entity,'')):'';const bath=c.bathing_state_entity?this._norm(this._value(c.bathing_state_entity,'')):'';const txt=(chem+' '+bath).trim();return /attention|vigilance|warning|surveillance|variation|deconseille|deconseillee/.test(txt)}
- _hasAlertRaw(){const c=this.config||{};if(!c.show_recommendations)return false;const actions=c.actions_entity?this._norm(this._value(c.actions_entity,'')):'';const actionable=actions&&!(actions.startsWith('aucune')||['ok','bon','normal','ras','rien','none','unknown','unavailable',''].includes(actions))&&/(ajouter|corriger|correction|dosage|produit|ph\+|ph-|chlore|redox|orp|traitement|alerte)/.test(actions);if(actionable)return true;const explicit=this._isExplicitAlert();return explicit===true&&Boolean(actions)}
-_hasAlert(){return this._hasAlertRaw()&&!this._suppressed()}
+class PoolPilotDashboardCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("pool-pilot-dashboard-editor");
+  }
+  static getStubConfig() {
+    return {
+      title: "Piscine",
+      show_weather: true,
+      show_weather_alerts: true,
+      show_recommendations: true,
+      enable_filter_pump: true,
+      enable_heatpump: false,
+      enable_electrolyzer: false,
+      electrolyzer_mode: "simple",
+      enable_counter_current: false,
+      enable_pool_house: true,
+      enable_lighting: false,
+      enable_aux1: false,
+      enable_aux2: false,
+      disinfection_mode: "auto",
+    };
+  }
+  setConfig(config) {
+    this.config = {
+      title: "Piscine",
+      show_weather: true,
+      show_weather_alerts: true,
+      show_recommendations: true,
+      enable_filter_pump: true,
+      enable_heatpump: false,
+      enable_electrolyzer: false,
+      electrolyzer_mode: "simple",
+      enable_counter_current: false,
+      enable_pool_house: false,
+      enable_lighting: false,
+      enable_aux1: false,
+      enable_aux2: false,
+      disinfection_mode: "auto",
+      history_default_period: "24h",
+      ph_min: 6.8,
+      ph_max: 7.8,
+      chlorine_min: 0,
+      chlorine_max: 5,
+      orp_min: 400,
+      orp_max: 900,
+      ...config,
+    };
+    this._tab = this._tab || "analysis";
+    this._panel = this._panel || null;
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+  }
+  set hass(hass) {
+    this._hass = hass;
+    this._ensureWeatherForecast();
+    if (this._panel) {
+      const p =
+        this.shadowRoot?.querySelector(".expert-scroll") ||
+        this.shadowRoot?.querySelector(".full-sheet");
+      this._panelScroll = p ? p.scrollTop : this._panelScroll;
+      if (this._panel === "history") this._scheduleHistoryRefresh();
+      return;
+    }
+    const ae = this.shadowRoot?.activeElement;
+    if (ae && ["INPUT", "TEXTAREA", "SELECT"].includes(ae.tagName)) return;
+    this._renderPreservingScroll();
+  }
+  _scrollSnapshot() {
+    const rows = [];
+    let n = this;
+    while (n) {
+      if (n.scrollHeight > n.clientHeight + 2)
+        rows.push([n, n.scrollTop, n.scrollLeft]);
+      const r = n.getRootNode?.();
+      n = n.parentElement || (r && r.host) || null;
+    }
+    const d = document.scrollingElement;
+    if (d) rows.push([d, d.scrollTop, d.scrollLeft]);
+    return rows;
+  }
+  _restoreScroll(rows) {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        for (const [n, t, l] of rows || []) {
+          try {
+            n.scrollTop = t;
+            n.scrollLeft = l;
+          } catch (e) {}
+        }
+      }),
+    );
+  }
+  _renderPreservingScroll() {
+    const rows = this._scrollSnapshot();
+    this.render();
+    this._restoreScroll(rows);
+  }
+  getCardSize() {
+    return 12;
+  }
+  _state(e) {
+    return e && this._hass?.states?.[e] ? this._hass.states[e] : undefined;
+  }
+  _setOpt(e, obj, ms = 10000) {
+    if (!e) return;
+    this._opt = this._opt || {};
+    this._opt[e] = { ...(this._opt[e] || {}), ...obj, _until: Date.now() + ms };
+  }
+  _optState(e) {
+    const o = this._opt?.[e];
+    return o && o._until > Date.now() ? o : null;
+  }
+  _fmtMainTemp(v) {
+    const n = parseFloat(
+      String(v ?? "")
+        .replace(",", ".")
+        .replace(/[^0-9+\-.]/g, ""),
+    );
+    if (Number.isFinite(n)) return n.toFixed(1).replace(".", ",");
+    return String(v ?? "—");
+  }
+  _fmt(v, f = "—") {
+    if (v === undefined || v === null) return f;
+    const s = String(v).trim();
+    return !s || ["unknown", "unavailable", "none", "None"].includes(s) ? f : s;
+  }
+  _value(e, f = "—") {
+    const o = this._optState(e);
+    if (o && o.state !== undefined) return o.state;
+    const s = this._state(e);
+    if (
+      !s ||
+      ["unknown", "unavailable", "none", "None", ""].includes(String(s.state))
+    )
+      return f;
+    return s.state;
+  }
+  _num(e) {
+    const n = parseFloat(String(this._value(e, "")).replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  _unit(e) {
+    return this._state(e)?.attributes?.unit_of_measurement || "";
+  }
+  _format(e, f = "—") {
+    const v = this._value(e, f),
+      u = this._unit(e);
+    return v === f ? v : `${v}${u ? " " + u : ""}`;
+  }
+  _domain(e) {
+    return String(e || "").split(".")[0];
+  }
+  _isOn(e) {
+    return [
+      "on",
+      "heat",
+      "heating",
+      "cool",
+      "auto",
+      "running",
+      "active",
+      "enabled",
+    ].includes(String(this._value(e, "off")).toLowerCase());
+  }
+  _autoEntity() {
+    return "";
+  }
+  _autoLegacyEntity() {
+    return (this.config || {}).pump_auto_entity || "";
+  }
+  _smartFiltrationEntity() {
+    const c = this.config || {};
+    return (
+      c.smart_filtration_entity ||
+      c.filtration_smart_entity ||
+      c.auto_filtration_status_entity ||
+      ""
+    );
+  }
+  _autoActive() {
+    const s = this._state(this._smartFiltrationEntity());
+    const a = this._state(
+      this.config.action_summary_entity || this.config.actions_entity,
+    );
+    const raw = String(
+      s?.state ||
+        a?.attributes?.auto_schedule_status ||
+        localStorage.getItem(this._key("auto_active")) ||
+        "",
+    ).toLowerCase();
+    return [
+      "running",
+      "waiting",
+      "done",
+      "on",
+      "active",
+      "enabled",
+      "auto",
+      "scheduled",
+      "planifié",
+      "planifie",
+      "programmé",
+      "programme",
+      "en attente",
+    ].some((v) => raw.includes(v));
+  }
+  _toFrenchDeg(ppm) {
+    const n = parseFloat(String(ppm ?? "").replace(",", "."));
+    return Number.isFinite(n) ? Math.round((n / 10) * 10) / 10 : "";
+  }
+  _fromFrenchDeg(df) {
+    const n = parseFloat(String(df ?? "").replace(",", "."));
+    return Number.isFinite(n) ? Math.round(n * 10 * 10) / 10 : "";
+  }
+  _fmtSmartStatus(s) {
+    const x = String(s || "").toLowerCase();
+    const map = {
+      disabled: "Désactivé",
+      off: "Désactivé",
+      on: "Actif",
+      running: "En cours",
+      waiting: "En attente",
+      waiting_next_day: "En attente demain",
+      done: "Terminé",
+      active: "Actif",
+      scheduled: "Programmé",
+    };
+    return map[x] || s || "—";
+  }
+  _safeRender() {
+    if (!this._panel) this.render();
+  }
+  _key(s) {
+    return `pool-pilot-dashboard:${this.config?.title || "pool"}:${s}`;
+  }
+  _stripEntityByKey(k) {
+    const c = this.config || {};
+    const explicit = {
+      ph: c.strip_ph_entity,
+      alkalinity: c.strip_alkalinity_entity,
+      calcium: c.strip_calcium_entity,
+      cya: c.strip_cya_entity,
+      free_chlorine: c.strip_free_chlorine_entity,
+      total_chlorine: c.strip_total_chlorine_entity,
+      temperature: c.strip_temperature_entity,
+    }[k];
+    if (explicit) return explicit;
+    const seed = (
+      c.strip_test_entity ||
+      c.raw_measurements_entity ||
+      c.filtration_duration_entity ||
+      "sensor.piscine"
+    ).replace(/^sensor\./, "");
+    const pool = seed.split("_")[0] || "piscine";
+    const names =
+      {
+        ph: ["strip_ph", "ph_bandelette"],
+        alkalinity: ["strip_alkalinity", "tac_bandelette"],
+        calcium: ["strip_calcium", "th_bandelette"],
+        cya: ["strip_cya", "stabilisant_bandelette"],
+        free_chlorine: ["strip_free_chlorine", "chlore_libre_bandelette"],
+        total_chlorine: ["strip_total_chlorine", "chlore_total_bandelette"],
+        temperature: ["strip_temperature", "temperature_bandelette"],
+      }[k] || [];
+    const candidates = [];
+    for (const n of names) {
+      candidates.push(`sensor.${pool}_${n}`);
+      candidates.push(`sensor.piscine_${n}`);
+    }
+    return candidates.find((e) => this._state(e)) || "";
+  }
+  _stripEntityValue(k) {
+    const e = this._stripEntityByKey(k);
+    if (!e) return null;
+    const n = parseFloat(String(this._value(e, "")).replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  _refreshStripEntities() {
+    const ids = [
+      this.config?.strip_test_entity,
+      this.config?.raw_measurements_entity,
+      "sensor.piscine_test_bandelette",
+    ]
+      .filter(Boolean)
+      .filter((e) => this._state(e));
+    const unique = [...new Set(ids)];
+    if (unique.length)
+      this._hass
+        ?.callService?.("homeassistant", "update_entity", { entity_id: unique })
+        .catch(() => {});
+  }
+  _stripLocalKey() {
+    return this._key("last_strip_test");
+  }
+  _getLocalStrip() {
+    try {
+      return (
+        JSON.parse(localStorage.getItem(this._stripLocalKey()) || "{}") || {}
+      );
+    } catch (e) {
+      return {};
+    }
+  }
+  _setLocalStrip(payload) {
+    const data = { ...payload, datetime: new Date().toLocaleString() };
+    try {
+      localStorage.setItem(this._stripLocalKey(), JSON.stringify(data));
+    } catch (e) {}
+    this._lastStripPayload = data;
+  }
+  _until(k) {
+    const t = Number(localStorage.getItem(this._key(k)) || 0);
+    return Number.isFinite(t) ? t : 0;
+  }
+  _suppressed() {
+    return Date.now() < Math.max(this._until("snooze"), this._until("done"));
+  }
+  _isSnoozed() {
+    return Date.now() < this._until("snooze");
+  }
+  _isDone() {
+    return Date.now() < this._until("done");
+  }
+  _clearSnooze() {
+    localStorage.removeItem(this._key("snooze"));
+    this.render();
+  }
+  _setSuppress(kind, hours) {
+    const ttl = kind === "snooze" ? 24 * 365 : hours;
+    localStorage.setItem(this._key(kind), String(Date.now() + ttl * 3600000));
+    if (kind === "done") this._callConfirm();
+    this._panel = null;
+    this.render();
+  }
+  _labelState(v) {
+    const m = {
+      safe: "Bon",
+      ok: "Bon",
+      good: "Bon",
+      bon: "Bon",
+      normal: "Bon",
+      warning: "Attention",
+      attention: "Attention",
+      high: "Trop Haut",
+      low: "Trop Bas",
+      avoid: "Déconseillée",
+      bad: "Mauvais",
+      danger: "Danger",
+      unknown: "Inconnu",
+      unavailable: "Indisponible",
+    };
+    return m[String(v || "").toLowerCase()] || v || "—";
+  }
+  _statusIcon(v) {
+    const x = String(v || "").toLowerCase();
+    return ["safe", "ok", "good", "bon", "normal"].includes(x)
+      ? '<span class="status-bang status-good"><ha-icon icon="mdi:thumb-up-outline"></ha-icon></span>'
+      : '<span class="status-bang">!</span>';
+  }
+  _qualityClass(v) {
+    const x = String(v || "").toLowerCase();
+    if (["safe", "ok", "good", "bon", "normal"].includes(x)) return "good";
+    if (["warning", "attention", "high", "low"].includes(x)) return "warn";
+    if (["avoid", "bad", "danger"].includes(x)) return "bad";
+    return "neutral";
+  }
+  _phStatus(v) {
+    const n = parseFloat(String(v).replace(",", "."));
+    if (!Number.isFinite(n)) return "unknown";
+    if (n < 7.0) return "low";
+    if (n > 7.4) return "high";
+    return "good";
+  }
+  _chlStatus() {
+    const c = this._num(this.config.chlorine_entity);
+    if (c !== null) {
+      if (c < 1) return "low";
+      if (c > 3) return "high";
+      return "good";
+    }
+    const o = this._num(this.config.orp_entity);
+    if (o !== null) {
+      if (o < 650) return "low";
+      if (o > 800) return "high";
+      return "good";
+    }
+    return "unknown";
+  }
+  _norm(v) {
+    return String(v ?? "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+  _isExplicitAlert() {
+    const c = this.config || {},
+      v = c.alert_entity ? this._norm(this._value(c.alert_entity, "")) : "";
+    if (!v) return null;
+    if (
+      v.startsWith("aucune") ||
+      ["ok", "bon", "normal", "ras", "rien", "false", "off", "clear"].includes(
+        v,
+      )
+    )
+      return false;
+    if (
+      ["alerte", "alert", "on", "true", "danger", "urgent", "action"].includes(
+        v,
+      ) ||
+      /(alerte|alert|urgent|action|corriger|ajouter|trop haut|trop bas)/.test(v)
+    )
+      return true;
+    return null;
+  }
+  _isVigilanceState() {
+    const c = this.config || {};
+    const chem = c.chemistry_state_entity
+      ? this._norm(this._value(c.chemistry_state_entity, ""))
+      : "";
+    const bath = c.bathing_state_entity
+      ? this._norm(this._value(c.bathing_state_entity, ""))
+      : "";
+    const txt = (chem + " " + bath).trim();
+    return /attention|vigilance|warning|surveillance|variation|deconseille|deconseillee/.test(
+      txt,
+    );
+  }
+  _hasAlertRaw() {
+    const c = this.config || {};
+    if (!c.show_recommendations) return false;
+    const actions = c.actions_entity
+      ? this._norm(this._value(c.actions_entity, ""))
+      : "";
+    const actionable =
+      actions &&
+      !(
+        actions.startsWith("aucune") ||
+        [
+          "ok",
+          "bon",
+          "normal",
+          "ras",
+          "rien",
+          "none",
+          "unknown",
+          "unavailable",
+          "",
+        ].includes(actions)
+      ) &&
+      /(ajouter|corriger|correction|dosage|produit|ph\+|ph-|chlore|redox|orp|traitement|alerte)/.test(
+        actions,
+      );
+    if (actionable) return true;
+    const explicit = this._isExplicitAlert();
+    return explicit === true && Boolean(actions);
+  }
+  _hasAlert() {
+    return this._hasAlertRaw() && !this._suppressed();
+  }
 
- _alertIssues(){const issues=[];const ph=this._phStatus(this._value(this.config.ph_entity,''));const chl=this._chlStatus();if(ph==='high')issues.push('corriger le pH trop haut');if(ph==='low')issues.push('corriger le pH trop bas');if(chl==='high')issues.push('corriger le chlore trop haut');if(chl==='low')issues.push('corriger le chlore trop bas');const actions=this.config.actions_entity?String(this._value(this.config.actions_entity,'')).trim():'';if(actions&&!/^(ok|bon|good|normal|aucune|none|ras|rien|—|-|unknown|unavailable)$/i.test(actions)&&/(ajouter|corriger|correction|dosage|produit|ph\+|ph-|chlore|redox|traitement)/i.test(actions))issues.push(actions);return [...new Set(issues)]}
- _banner(){
-  if(this._isSnoozed())return{cls:'bottom-snoozed',icon:'mdi:alert-circle-outline',text:'Vous avez reporté vos alertes',cancel:true};
-  if(this._isDone()&&this._hasAlertRaw())return{cls:'bottom-correction',icon:'mdi:thumb-up-outline',text:'Correction de l’eau en cours'};
-  if(this._hasAlertRaw())return{cls:'bottom-alert action',icon:'mdi:alert-outline',text:'Alerte en cours : suivre nos conseils',open:true};
-  if(this._isVigilanceState())return{cls:'bottom-watch action',icon:'mdi:eye-outline',text:'Vigilance en cours',open:true,panel:'vigilance'};
-  return{cls:'bottom-ok',icon:'mdi:heart-outline',text:'Tout est parfait, bravo !'}
+  _alertIssues() {
+    const issues = [];
+    const ph = this._phStatus(this._value(this.config.ph_entity, ""));
+    const chl = this._chlStatus();
+    if (ph === "high") issues.push("corriger le pH trop haut");
+    if (ph === "low") issues.push("corriger le pH trop bas");
+    if (chl === "high") issues.push("corriger le chlore trop haut");
+    if (chl === "low") issues.push("corriger le chlore trop bas");
+    const actions = this.config.actions_entity
+      ? String(this._value(this.config.actions_entity, "")).trim()
+      : "";
+    if (
+      actions &&
+      !/^(ok|bon|good|normal|aucune|none|ras|rien|—|-|unknown|unavailable)$/i.test(
+        actions,
+      ) &&
+      /(ajouter|corriger|correction|dosage|produit|ph\+|ph-|chlore|redox|traitement)/i.test(
+        actions,
+      )
+    )
+      issues.push(actions);
+    return [...new Set(issues)];
+  }
+  _banner() {
+    if (this._isSnoozed())
+      return {
+        cls: "bottom-snoozed",
+        icon: "mdi:alert-circle-outline",
+        text: "Vous avez reporté vos alertes",
+        cancel: true,
+      };
+    if (this._isDone() && this._hasAlertRaw())
+      return {
+        cls: "bottom-correction",
+        icon: "mdi:thumb-up-outline",
+        text: "Correction de l’eau en cours",
+      };
+    if (this._hasAlertRaw())
+      return {
+        cls: "bottom-alert action",
+        icon: "mdi:alert-outline",
+        text: "Alerte en cours : suivre nos conseils",
+        open: true,
+      };
+    if (this._isVigilanceState())
+      return {
+        cls: "bottom-watch action",
+        icon: "mdi:eye-outline",
+        text: "Vigilance en cours",
+        open: true,
+        panel: "vigilance",
+      };
+    return {
+      cls: "bottom-ok",
+      icon: "mdi:heart-outline",
+      text: "Tout est parfait, bravo !",
+    };
+  }
+  _call(e, action = "toggle", value = null) {
+    if (!e || !this._hass) return Promise.resolve();
+    const d = this._domain(e);
+    if (d === "button" || d === "input_button")
+      return this._hass.callService(d, "press", { entity_id: e });
+    if (d === "script")
+      return this._hass.callService("script", "turn_on", { entity_id: e });
+    if (d === "climate") {
+      if (["heat", "cool", "auto"].includes(action))
+        return this._hass.callService("climate", "set_hvac_mode", {
+          entity_id: e,
+          hvac_mode: action,
+        });
+      if (action === "set_temperature")
+        return this._hass.callService("climate", "set_temperature", {
+          entity_id: e,
+          temperature: value,
+        });
+      return this._hass.callService(
+        "climate",
+        action === "off" ? "turn_off" : action === "on" ? "turn_on" : "toggle",
+        { entity_id: e },
+      );
+    }
+    if (["switch", "input_boolean", "light", "fan"].includes(d))
+      return this._hass.callService(
+        d,
+        action === "on" ? "turn_on" : action === "off" ? "turn_off" : "toggle",
+        { entity_id: e },
+      );
+    if (d === "automation")
+      return this._hass.callService("automation", "trigger", { entity_id: e });
+    return this._hass.callService(
+      "homeassistant",
+      action === "on" ? "turn_on" : action === "off" ? "turn_off" : "toggle",
+      { entity_id: e },
+    );
+  }
+  _callConfirm() {
+    const c = this.config || {};
+    if (c.confirm_action_entity) this._call(c.confirm_action_entity, "press");
+    else if (this._hass)
+      this._hass
+        .callService("button", "press", {
+          entity_id: "button.piscine_valider_action_recommandee",
+        })
+        .catch(() => {});
+  }
+  _pct(v, min, max) {
+    const n = parseFloat(String(v).replace(",", "."));
+    return Number.isFinite(n)
+      ? Math.max(0, Math.min(1, (n - min) / (max - min)))
+      : 0.5;
+  }
+  _polar(cx, cy, r, a) {
+    const rad = ((a - 90) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+  _arc(cx, cy, r, a1, a2) {
+    const s = this._polar(cx, cy, r, a2),
+      e = this._polar(cx, cy, r, a1),
+      large = a2 - a1 <= 180 ? 0 : 1;
+    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`;
+  }
+  _phGauge(value) {
+    const n = parseFloat(String(value ?? "").replace(",", ".")),
+      display = Number.isFinite(n)
+        ? n.toFixed(2).replace(/0+$/, "").replace(/[.,]$/, "").replace(".", ",")
+        : "—",
+      min = Number(this.config.ph_min || 6.8),
+      max = Number(this.config.ph_max || 7.8),
+      pct = this._pct(value, min, max),
+      end = -135 + pct * 270,
+      status = this._phStatus(value),
+      p = this._polar(70, 70, 54, end);
+    return `<div class="gauge ph-gauge"><svg viewBox="0 0 140 140" class="ph-svg"><path class="ph-track" d="${this._arc(70, 70, 54, -135, 135)}"/><path class="ph-progress" d="${this._arc(70, 70, 54, -135, end)}"/><circle class="ph-dot" cx="${p.x}" cy="${p.y}" r="10"/><text x="70" y="78" text-anchor="middle">${display}</text></svg><div class="gauge-value gauge-value-placeholder" aria-hidden="true">&nbsp;</div><div class="gauge-label">pH</div><div class="pill ${this._qualityClass(status)}">${this._statusIcon(status)}${this._labelState(status)}</div></div>`;
+  }
+  _resolvedDisinfectionMode() {
+    const c = this.config || {},
+      s = this._state(c.disinfection_mode_entity),
+      raw = String(
+        s?.state ??
+          s?.attributes?.disinfection_mode ??
+          c.disinfection_mode ??
+          "auto",
+      ).toLowerCase();
+    if (raw.includes("orp") || raw.includes("redox")) return "orp";
+    if (raw.includes("chlor")) return "chlorine";
+    return "auto";
+  }
+  _chlorineGauge() {
+    const mode = this._resolvedDisinfectionMode(),
+      hasChl = this._num(this.config.chlorine_entity) !== null,
+      hasOrp = this._num(this.config.orp_entity) !== null,
+      isChl = mode === "chlorine" || (mode === "auto" && hasChl),
+      raw = isChl
+        ? this._num(this.config.chlorine_entity)
+        : this._num(this.config.orp_entity),
+      min =
+        Number(isChl ? this.config.chlorine_min : this.config.orp_min) ||
+        (isChl ? 0 : 400),
+      max =
+        Number(isChl ? this.config.chlorine_max : this.config.orp_max) ||
+        (isChl ? 5 : 900),
+      pct =
+        raw === null
+          ? 0.5
+          : Math.max(0, Math.min(1, (raw - min) / (max - min))),
+      angle = -112 + pct * 224,
+      status = this._chlStatus(),
+      label = isChl ? "Chlore" : "ORP",
+      valueLabel =
+        raw === null
+          ? "—"
+          : isChl
+            ? `${raw.toFixed(1).replace(".", ",")} ppm`
+            : `${Math.round(raw)} mV`;
+    let ticks = "";
+    for (let i = 0; i < 13; i++) {
+      const a = -112 + i * (224 / 12),
+        p1 = this._polar(70, 70, 50, a),
+        p2 = this._polar(70, 70, i % 3 === 0 ? 37 : 43, a);
+      ticks += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`;
+    }
+    return `<div class="gauge chlorine-gauge"><svg viewBox="0 0 140 140" class="speed-svg"><path class="speed-track" d="${this._arc(70, 70, 50, -112, 112)}"/><g class="ticks">${ticks}</g><line class="speed-needle" x1="70" y1="70" x2="70" y2="28" style="transform:rotate(${angle}deg);transform-origin:70px 70px"/><circle class="hub" cx="70" cy="70" r="5"/></svg><div class="gauge-value">${valueLabel}</div><div class="gauge-label">${label}</div><div class="pill ${this._qualityClass(status)}">${this._statusIcon(status)}${this._labelState(status)}</div></div>`;
+  }
+  _smallDevice(label, icon, entity) {
+    return `<div class="device-mini ${!entity ? "disabled" : ""}"><ha-icon icon="${icon}"></ha-icon><span>${label}</span>${entity ? `<button class="mini-power ${this._isOn(entity) ? "on" : ""}" data-action="toggle" data-entity="${entity}"><ha-icon icon="mdi:power"></ha-icon></button>` : `<button class="mini-power"><ha-icon icon="mdi:plus"></ha-icon></button>`}</div>`;
+  }
+  _controlPanel() {
+    const c = this.config || {};
+    return `<div class="control-panel">${c.enable_filter_pump ? this._filterControl() : ""}${c.enable_heatpump ? this._heatpumpControl() : ""}${c.enable_electrolyzer ? this._electrolyzerControl() : ""}${c.enable_counter_current ? this._controlDevice("Nage à contre-courant", "mdi:waves-arrow-right", c.counter_current_entity, "Commande auxiliaire") : ""}${c.enable_lighting ? this._controlDevice("Éclairage", "mdi:lightbulb-outline", c.lighting_entity, "Commande éclairage") : ""}${c.enable_aux1 ? this._controlDevice(c.aux1_label || "Auxiliaire 1", "mdi:electric-switch", c.aux1_entity, "Contact auxiliaire") : ""}${c.enable_aux2 ? this._controlDevice(c.aux2_label || "Auxiliaire 2", "mdi:electric-switch", c.aux2_entity, "Contact auxiliaire") : ""}</div>`;
+  }
+  _electrolyzerControl() {
+    const c = this.config || {},
+      advanced = c.electrolyzer_mode === "advanced",
+      on = this._isOn(c.electrolyzer_entity),
+      status =
+        this._state(c.electrolyzer_status_entity)?.state ||
+        this._state(c.electrolyzer_entity)?.state ||
+        "—",
+      raw = this._num(c.electrolyzer_output_entity),
+      output = raw === null ? 0 : Math.max(0, Math.min(100, raw));
+    return `<div class="control-device electrolyzer ${advanced ? "advanced" : ""}"><ha-icon icon="mdi:creation-outline"></ha-icon><div><strong>Électrolyseur</strong><span>${advanced ? `${status} · ${Math.round(output)} %` : status}</span></div><div class="control-buttons"><button class="round ${on ? "on" : ""}" data-action="toggle" data-entity="${c.electrolyzer_entity || ""}"><ha-icon icon="mdi:power"></ha-icon></button>${advanced && c.electrolyzer_boost_entity ? `<button class="round boost ${this._isOn(c.electrolyzer_boost_entity) ? "on" : ""}" title="Boost" data-action="toggle" data-entity="${c.electrolyzer_boost_entity}"><ha-icon icon="mdi:rocket-launch-outline"></ha-icon></button>` : ""}</div>${advanced && c.electrolyzer_output_entity ? `<div class="electro-output"><label>Production <b>${Math.round(output)} %</b></label><input type="range" min="0" max="100" step="1" value="${Math.round(output)}" data-electro-output="${c.electrolyzer_output_entity}"></div>` : ""}</div>`;
+  }
+  _filterControl() {
+    const c = this.config || {};
+    return `<div class="control-device"><ha-icon icon="mdi:pool"></ha-icon><div><strong>Filtration</strong><span>${c.filtration_duration_entity ? "Durée recommandée : " + this._format(c.filtration_duration_entity) : "Pompe de filtration"}</span></div><div class="control-buttons two"><button title="Marche/arrêt manuel" class="round ${this._isOn(c.pump_entity) ? "on" : ""}" data-action="toggle" data-entity="${c.pump_entity || ""}"><ha-icon icon="mdi:power"></ha-icon></button><button title="Activer/désactiver filtration automatique Pool Pilot" class="round auto ${this._autoActive() ? "on" : ""}" data-action="auto_schedule" data-entity=""><span class="bolt">ϟ</span><small>A</small></button></div></div>`;
+  }
+  _heatpumpControl() {
+    const c = this.config || {},
+      opt = this._optState(c.heatpump_entity) || {},
+      real = String(
+        this._state(c.heatpump_entity)?.state ??
+          this._value(c.heatpump_entity, "off"),
+      ).toLowerCase(),
+      mode = String(opt.state ?? real).toLowerCase(),
+      target =
+        opt.temperature ??
+        this._state(c.heatpump_entity)?.attributes?.temperature ??
+        this._value(c.heatpump_temp_entity, "—"),
+      on = !["off", "unavailable", "unknown", ""].includes(mode);
+    return `<div class="control-device heat"><ha-icon icon="mdi:heat-pump-outline"></ha-icon><div><strong>Pompe à chaleur</strong><span>${mode || "off"}</span></div><button class="round ${on ? "on" : ""}" data-action="toggle" data-entity="${c.heatpump_entity || ""}"><ha-icon icon="mdi:power"></ha-icon></button><div class="heat-controls"><button class="mode ${mode === "heat" ? "active" : ""}" data-hvac="heat">Chauffage</button><button class="mode ${mode === "auto" ? "active" : ""}" data-hvac="auto">Auto</button><button class="mode ${mode === "cool" ? "active" : ""}" data-hvac="cool">Refroid.</button><div class="temp"><button data-temp="-0.5">−</button><strong>${target === "—" ? "—°C" : target + "°C"}</strong><button data-temp="0.5">+</button></div></div></div>`;
+  }
+  _controlDevice(label, icon, entity, sub) {
+    return `<div class="control-device"><ha-icon icon="${icon}"></ha-icon><div><strong>${label}</strong><span>${sub || "Commande"}</span></div><div class="control-buttons"><button class="round ${this._isOn(entity) ? "on" : ""}" data-action="toggle" data-entity="${entity || ""}"><ha-icon icon="mdi:power"></ha-icon></button></div></div>`;
+  }
+  _productCategoryLabel(cat) {
+    const labels = {
+      ph_minus: "pH-",
+      ph_plus: "pH+",
+      chlorine: "Chlore lent",
+      chlorine_slow: "Chlore lent",
+      chlorine_shock: "Chlore choc",
+      chlorine_liquid: "Chlore liquide",
+      bromine: "Brome",
+      active_oxygen: "Oxygène actif",
+      alkalinity: "TAC+",
+      alkalinity_minus: "TAC-",
+      hardness_plus: "TH+",
+      hardness_minus: "TH-",
+      stabilizer: "Stabilisant",
+      algaecide: "Anti-algues",
+      anti_algae: "Anti-algues",
+      flocculant: "Floculant",
+      clarifier: "Clarifiant",
+      wintering: "Hivernage",
+      salt: "Sel",
+      other: "Autre",
+    };
+    return labels[cat] || cat || "Produit";
+  }
+  _products() {
+    let ps = [];
+    const ph = this._state(this.config.pool_house_entity);
+    if (ph?.attributes?.products)
+      ps = ph.attributes.products.map((p) => ({
+        state: p.stock_quantity ?? p.stock ?? "—",
+        entity_id: p.id || p.name,
+        attributes: {
+          ...p,
+          friendly_name: p.name,
+          brand: p.brand || p.manufacturer || "",
+          category: p.category,
+          category_label: p.category_label,
+          product_type: p.category,
+          unit_of_measurement: p.stock_unit || p.unit || "",
+          stock_max:
+            p.initial_stock_quantity ||
+            p.stock_initial ||
+            p.stock_quantity ||
+            100,
+          product_id: p.id,
+          id: p.id,
+        },
+      }));
+    const extra = String(this.config.product_entities || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .map((e) => this._state(e))
+      .filter(Boolean);
+    return ps.concat(extra);
+  }
+  _poolHousePanel() {
+    const ps = this._products();
+    return `<div class="full-sheet poolhouse-sheet"><div class="sheet-top"><button data-panel=""><ha-icon icon="mdi:close"></ha-icon></button><h2>Pool House</h2><button data-panel="addProduct"><ha-icon icon="mdi:plus"></ha-icon></button></div><div class="seg"><button class="active">Produits</button><button>Équipements</button></div><div class="product-list">${ps.length ? ps.map((s) => this._productCard(s)).join("") : '<div class="empty">Aucun produit configuré. Ajoute les capteurs de stock dans l’éditeur visuel ou crée un produit.</div>'}</div></div>`;
+  }
+  _productCard(s) {
+    const name = s.attributes.friendly_name || s.entity_id,
+      brand = s.attributes.brand || s.attributes.manufacturer || "",
+      cat = this._productCategoryLabel(
+        s.attributes.category || s.attributes.product_type || "Produit",
+      ),
+      unit = s.attributes.unit_of_measurement || "",
+      stock = parseFloat(s.state),
+      max = parseFloat(
+        s.attributes.stock_max ||
+          s.attributes.max ||
+          s.attributes.initial_stock ||
+          100,
+      ),
+      pct =
+        Number.isFinite(stock) && Number.isFinite(max) && max > 0
+          ? Math.max(0, Math.min(100, (stock / max) * 100))
+          : 60;
+    return `<div class="product-card"><button class="delete" data-product-delete="${s.attributes.product_id || name}"><ha-icon icon="mdi:close"></ha-icon></button><span class="tag">${cat}</span><strong>${name}</strong><em>${brand}</em><div class="stock"><i style="width:${pct}%"></i></div><div class="stock-label">${s.state}${unit ? " " + unit : ""}</div><button class="edit" data-product-edit="${s.attributes.product_id || name}"><ha-icon icon="mdi:pencil-outline"></ha-icon></button></div>`;
+  }
+  _field(name, d = "") {
+    const p = this._editingProduct || {},
+      a = p.attributes || p;
+    let v = a[name];
+    if ((v === undefined || v === null || v === "") && a.notes) {
+      try {
+        const n = typeof a.notes === "string" ? JSON.parse(a.notes) : a.notes;
+        if (n && typeof n === "object" && n[name] !== undefined) v = n[name];
+      } catch (e) {}
+    }
+    if (v === undefined && name === "product_type") v = a.category;
+    if (v === undefined && name === "stock") v = a.stock_quantity ?? p.state;
+    if (v === undefined && name === "unit")
+      v = a.stock_unit || a.unit_of_measurement;
+    if (v === undefined && name === "dose_unit") v = a.dosage_unit;
+    if (v === undefined && name === "reference_volume_m3")
+      v = a.volume_basis_m3;
+    if (v === undefined && name === "normal_dose_amount") v = a.dosage_quantity;
+    if (v === undefined && name === "ph_delta") v = a.effect_delta;
+    return v ?? d;
+  }
+  _selected(name, val) {
+    return String(this._field(name, "")) === String(val) ? " selected" : "";
+  }
+  _addProductPanel() {
+    const editing = !!this._editingProduct,
+      id = this._field("product_id", this._field("id", ""));
+    return `<div class="full-sheet add-product"><div class="sheet-top"><button data-panel="poolhouse"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>${editing ? "Modifier le produit" : "Nouveau produit"}</h2><button data-add-product="1"><ha-icon icon="mdi:check"></ha-icon></button></div><input type="hidden" name="id" value="${id || ""}"><div class="section-title">Votre produit</div><label>Type<select name="product_type"><optgroup label="Désinfectants"><option value="chlorine_slow"${this._selected("product_type", "chlorine_slow") || this._selected("product_type", "chlorine")}>Chlore lent</option><option value="chlorine_shock"${this._selected("product_type", "chlorine_shock")}>Chlore choc</option><option value="chlorine_liquid"${this._selected("product_type", "chlorine_liquid")}>Chlore liquide</option><option value="bromine"${this._selected("product_type", "bromine")}>Brome</option><option value="active_oxygen"${this._selected("product_type", "active_oxygen")}>Oxygène actif</option><option value="salt"${this._selected("product_type", "salt")}>Sel / électrolyse</option></optgroup><optgroup label="Correcteurs"><option value="ph_minus"${this._selected("product_type", "ph_minus")}>pH-</option><option value="ph_plus"${this._selected("product_type", "ph_plus")}>pH+</option><option value="alkalinity"${this._selected("product_type", "alkalinity")}>TAC+</option><option value="alkalinity_minus"${this._selected("product_type", "alkalinity_minus")}>TAC-</option><option value="hardness_plus"${this._selected("product_type", "hardness_plus")}>TH+</option><option value="hardness_minus"${this._selected("product_type", "hardness_minus")}>TH-</option><option value="stabilizer"${this._selected("product_type", "stabilizer")}>Stabilisant</option></optgroup><optgroup label="Traitements"><option value="algaecide"${this._selected("product_type", "algaecide") || this._selected("product_type", "anti_algae")}>Anti-algues</option><option value="flocculant"${this._selected("product_type", "flocculant")}>Floculant</option><option value="clarifier"${this._selected("product_type", "clarifier")}>Clarifiant</option><option value="wintering"${this._selected("product_type", "wintering")}>Hivernage</option><option value="other"${this._selected("product_type", "other")}>Autre</option></optgroup></select></label><label>Nom<input name="name" placeholder="Ex : Bayrol Chloriklar" value="${this._field("friendly_name", this._field("name", ""))}"></label><label>Marque<input name="brand" placeholder="Cash Piscine" value="${this._field("brand", "")}"></label><div class="section-title">Détails sur le produit</div><label>Forme du produit<select name="form"><option value="granules"${this._selected("form", "granules")}>Granulés</option><option value="powder"${this._selected("form", "powder")}>Poudre</option><option value="liquid"${this._selected("form", "liquid")}>Liquide</option><option value="tablet"${this._selected("form", "tablet")}>Pastilles</option><option value="pebble"${this._selected("form", "pebble")}>Galets</option></select></label><label>Stock total<input name="stock" type="number" step="0.1" placeholder="5" value="${this._field("stock", "")}"></label><label>Unité de stock<select name="unit"><option value="kg"${this._selected("unit", "kg")}>kg</option><option value="g"${this._selected("unit", "g")}>g</option><option value="L"${this._selected("unit", "L")}>L</option><option value="ml"${this._selected("unit", "ml")}>ml</option><option value="pastille"${this._selected("unit", "pastille")}>pastille(s)</option><option value="galet"${this._selected("unit", "galet")}>galet(s)</option></select></label><label>Poids unitaire (g)<input name="unit_weight_g" type="number" step="0.1" placeholder="20" value="${this._field("unit_weight_g", "")}"></label><div class="switch-grid"><span>Multifonction</span><select name="multifunction"><option value="false"${this._selected("multifunction", false)}>Non</option><option value="true"${this._selected("multifunction", true)}>Oui</option></select><span>Dissolution</span><select name="dissolution"><option value="fast"${this._selected("dissolution", "fast")}>Rapide</option><option value="slow"${this._selected("dissolution", "slow")}>Lente</option></select><span>Stabilisant</span><select name="stabilized"><option value="false"${this._selected("stabilized", false)}>Non</option><option value="true"${this._selected("stabilized", true)}>Oui</option></select></div><div class="section-title">Dosage normal</div><label>Unité de dosage<select name="dose_unit"><option value="g"${this._selected("dose_unit", "g")}>g</option><option value="kg"${this._selected("dose_unit", "kg")}>kg</option><option value="ml"${this._selected("dose_unit", "ml")}>ml</option><option value="L"${this._selected("dose_unit", "L")}>L</option><option value="pastille"${this._selected("dose_unit", "pastille")}>pastille(s)</option><option value="galet"${this._selected("dose_unit", "galet")}>galet(s)</option></select></label><label>Volume d’eau de référence (m³)<input name="reference_volume_m3" type="number" step="0.1" placeholder="10" value="${this._field("reference_volume_m3", "")}"></label><p class="help">Exemple pH- : 100 g pour 10 m³ afin de baisser le pH de 0,1. Exemple galets : 5 pastilles pour 10 m³.</p><label>Quantité à insérer<input name="normal_dose_amount" type="number" step="0.1" placeholder="100" value="${this._field("normal_dose_amount", "")}"></label><label>Variation pH visée<input name="ph_delta" type="number" step="0.01" placeholder="0.1" value="${this._field("ph_delta", "")}"></label><label>Lieu de traitement<select name="treatment_place"><option value="skimmer"${this._selected("treatment_place", "skimmer")}>Dans le skimmer</option><option value="pool"${this._selected("treatment_place", "pool")}>Directement dans le bassin</option><option value="pump"${this._selected("treatment_place", "pump")}>Devant les buses de refoulement</option><option value="feeder"${this._selected("treatment_place", "feeder")}>Doseur / électrolyseur</option></select></label><div class="section-title">Dosage choc</div><label>Quantité à insérer<input name="shock_dose_amount" type="number" step="0.1" value="${this._field("shock_dose_amount", "")}"></label><div class="section-title">Dosage initial</div><label>Quantité à insérer<input name="initial_dose_amount" type="number" step="0.1" value="${this._field("initial_dose_amount", "")}"></label></div>`;
+  }
+  _chemistryIntel() {
+    const a =
+      this._state(
+        this.config.action_summary_entity || this.config.actions_entity,
+      )?.attributes || {};
+    const smart = this._state(this._smartFiltrationEntity())?.attributes || {};
+    return { ...a, ...smart };
+  }
+  _lsiStatusLabel(s) {
+    return (
+      {
+        corrosive: "Corrosive",
+        agressive: "Agressive",
+        equilibree: "Équilibrée",
+        entartrante: "Entartrante",
+        tres_entartrante: "Très entartrante",
+        incomplet: "Incomplet",
+      }[s] ||
+      s ||
+      "—"
+    );
+  }
+  _smartFiltrationInfo() {
+    const smart = this._state(this._smartFiltrationEntity());
+    const action = this._state(
+      this.config.action_summary_entity || this.config.actions_entity,
+    );
+    const a = { ...(action?.attributes || {}), ...(smart?.attributes || {}) };
+    const detail = a.detail || a.auto_schedule_detail || {};
+    const rawStatus = String(
+      a.status || a.auto_schedule_status || smart?.state || "—",
+    );
+    const status = this._fmtSmartStatus(rawStatus);
+    const target =
+      a.target_hours ??
+      a.auto_schedule_target_hours ??
+      this._value(this.config.filtration_duration_entity, "—");
+    const done = a.done_hours ?? a.auto_schedule_done_hours ?? "—";
+    const placement = String(
+      a.placement_mode ??
+        detail.placement_mode ??
+        this._value(
+          this._selectEntity("filtration_placement_mode"),
+          "centered",
+        ),
+    ).toLowerCase();
+    const center =
+      a.center_hour ??
+      detail.center_hour ??
+      this._value(this._numEntity("filtration_center_hour"), "12");
+    const start =
+      detail.earliest_start ??
+      a.earliest_start ??
+      detail.start ??
+      this._timeValue("auto_start_time", "07:00");
+    const end =
+      detail.latest_end ??
+      a.latest_end ??
+      detail.end ??
+      this._timeValue("auto_end_time", "22:00");
+    const win =
+      a.window_label ??
+      detail.window_label ??
+      (placement === "window"
+        ? `${start} → ${end}`
+        : `Centrée sur ${center} h`);
+    const placementRow =
+      placement === "window"
+        ? `<div>Plage autorisée<span>${start} → ${end}</span></div>`
+        : `<div>Heure centrale<span>${center} h</span></div>`;
+    const nextRaw =
+      a.next_start ||
+      a.auto_schedule_next_start ||
+      a.next_program ||
+      a.next_schedule;
+    const next = nextRaw ? this._formatDateTime(nextRaw) : "—";
+    const base = detail.base_hours ?? a.base_hours ?? "—";
+    const forecast = detail.forecast_temp_c ?? a.forecast_temp_c ?? "—";
+    const water =
+      detail.water_temp_c ??
+      a.water_temp_c ??
+      this._value(this.config.water_temp_entity, "—");
+    const factor =
+      detail.weather_factor ??
+      a.weather_factor ??
+      this._value(this.config.weather_factor_entity, "—");
+    return `<div class="section-title">Filtration intelligente</div><div class="diag smart-diag"><div>Mode<span>Auto intelligent</span></div><div>État<span>${status}</span></div><div>Cycle du jour<span>${done} h / ${target} h</span></div><div>Planification<span>${win}</span></div>${placementRow}<div>Prochaine programmation<span>${next}</span></div></div><div class="section-title">Calcul filtration</div><div class="diag smart-diag"><div>Température eau<span>${water} °C</span></div><div>Base<span>${base} h</span></div><div>Météo prévue<span>${forecast} °C</span></div><div>Facteur météo<span>${factor}</span></div></div>`;
+  }
+  _stripValue(strip, keys, def = "") {
+    for (const k of keys) {
+      const v = strip?.[k];
+      if (v !== undefined && v !== null && String(v) !== "") return v;
+    }
+    return def;
+  }
+  _stripNum(strip, keys) {
+    const v = this._stripValue(strip, keys, "");
+    const n = parseFloat(String(v).replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  _stripDate(strip) {
+    return (
+      strip?.datetime ||
+      strip?.date_time ||
+      strip?.last_update ||
+      strip?.updated_at ||
+      strip?.timestamp ||
+      strip?.date ||
+      ""
+    );
+  }
+  _stripRangeRow(label, value, unit, min, max, okMin, okMax, cls, extra = "") {
+    const n = parseFloat(String(value ?? "").replace(",", "."));
+    const has = Number.isFinite(n);
+    const pct = has
+      ? Math.max(0, Math.min(100, ((n - min) / (max - min)) * 100))
+      : 0;
+    const okLeft = Math.max(
+      0,
+      Math.min(100, ((okMin - min) / (max - min)) * 100),
+    );
+    const okRight = Math.max(
+      0,
+      Math.min(100, ((okMax - min) / (max - min)) * 100),
+    );
+    const okWidth = Math.max(0, okRight - okLeft);
+    const shown = has
+      ? Number.isInteger(n)
+        ? String(n)
+        : String(Math.round(n * 10) / 10)
+      : "—";
+    return `<div class="strip-range-row ${cls}"><div class="strip-range-head"><strong>${label}</strong><span>${shown}${unit ? ` ${unit}` : ""}${extra}</span></div><div class="strip-range-bar"><div class="strip-ok" style="left:${okLeft}%;width:${okWidth}%"></div>${has ? `<div class="strip-marker" style="left:${pct}%"><i></i><b>${shown}</b></div>` : ""}</div></div>`;
+  }
+  _stripRangesPanel(strip) {
+    const ph =
+      this._stripEntityValue("ph") ??
+      this._stripNum(strip, ["ph", "pH", "strip_ph"]);
+    const tac =
+      this._stripEntityValue("alkalinity") ??
+      this._stripNum(strip, ["alkalinity", "tac", "TAC", "strip_alkalinity"]);
+    const th =
+      this._stripEntityValue("calcium") ??
+      this._stripNum(strip, [
+        "calcium",
+        "hardness",
+        "th",
+        "TH",
+        "strip_calcium",
+      ]);
+    const cya =
+      this._stripEntityValue("cya") ??
+      this._stripNum(strip, ["cya", "stabilizer", "stabilisant", "strip_cya"]);
+    const fc =
+      this._stripEntityValue("free_chlorine") ??
+      this._stripNum(strip, [
+        "free_chlorine",
+        "chlorine_free",
+        "chlore_libre",
+        "strip_free_chlorine",
+      ]);
+    const tc =
+      this._stripEntityValue("total_chlorine") ??
+      this._stripNum(strip, [
+        "total_chlorine",
+        "chlorine_total",
+        "chlore_total",
+        "strip_total_chlorine",
+      ]);
+    const date = this._stripDate(strip);
+    const dateLine = date
+      ? `<div class="strip-last-date">Test effectué le ${date}</div>`
+      : "";
+    return `<div class="section-title strip-last-title">Test bandelette — dernier test</div><div class="strip-ranges-card">${dateLine}${this._stripRangeRow("Hardness (TH)", th, "ppm", 0, 500, 150, 300, "hardness", th !== null ? ` (${this._toFrenchDeg(th)} °f)` : ``)}${this._stripRangeRow("Alcalinité (TAC)", tac, "ppm", 0, 240, 80, 160, "alkalinity", tac !== null ? ` (${this._toFrenchDeg(tac)} °f)` : ``)}${this._stripRangeRow("Stabilisant (CYA)", cya, "ppm", 0, 150, 30, 60, "stabilizer")}${this._stripRangeRow("Chlore total", tc, "ppm", 0, 10, 1, 4, "total-chlorine")}${this._stripRangeRow("Chlore libre", fc, "ppm", 0, 10, 1, 3, "free-chlorine")}${this._stripRangeRow("pH", ph, "", 6.2, 8.4, 7.0, 7.6, "ph")}<div class="strip-range-help">Les zones bleues représentent les intervalles de valeurs recommandées.</div></div>`;
+  }
+
+  _manualEntityState(key) {
+    const id = this.config?.[key];
+    return id ? this._state(id) : undefined;
+  }
+  _manualAttr(entityKey, attr, fallback = "—") {
+    const st = this._manualEntityState(entityKey);
+    const v = st?.attributes?.[attr];
+    return v === undefined || v === null || v === "" ? fallback : v;
+  }
+  _fmtHourValue(v) {
+    if (v === undefined || v === null || v === "" || isNaN(Number(v)))
+      return "— h";
+    return `${Number(v).toFixed(1).replace(".", ",")} h`;
+  }
+  _fmtTempValue(v) {
+    if (v === undefined || v === null || v === "" || isNaN(Number(v)))
+      return "— °C";
+    return `${Number(v).toFixed(1).replace(".", ",")} °C`;
+  }
+  _smartDetail() {
+    const st =
+      this._manualEntityState("smart_filtration_entity") ||
+      this._manualEntityState("action_summary_entity") ||
+      this._manualEntityState("recommended_filter_entity");
+    return st?.attributes?.detail || st?.attributes?.auto_schedule_detail || {};
+  }
+  _smartAttrs() {
+    const st =
+      this._manualEntityState("smart_filtration_entity") ||
+      this._manualEntityState("action_summary_entity");
+    return st?.attributes || {};
+  }
+  _historySourceLabel(s) {
+    const v = String(s || "").toUpperCase();
+    if (v === "BAN" || v.includes("STRIP")) return "BAN";
+    if (v === "BLE" || v.includes("LIVE") || v.includes("FLIPR")) return "BLE";
+    return v || "—";
+  }
+  _lastRawMeasurements() {
+    const strip = this._state(this.config.strip_test_entity);
+    let rows =
+      strip?.attributes?.measurements ||
+      strip?.attributes?.last_measurements ||
+      [];
+    if (!Array.isArray(rows) || !rows.length) {
+      rows =
+        this._state(this.config.raw_measurements_entity)?.attributes
+          ?.measurements || [];
+    }
+    if ((!Array.isArray(rows) || !rows.length) && this._lastStripPayload) {
+      const p = this._lastStripPayload;
+      rows = [
+        {
+          datetime:
+            p.updated_at_local ||
+            new Date().toLocaleString("fr-FR", {
+              day: "2-digit",
+              month: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          ph: p.ph,
+          orp: this._value(this.config.orp_entity, "—"),
+          temp:
+            p.temperature || this._value(this.config.water_temp_entity, "—"),
+        },
+      ];
+    }
+    return Array.isArray(rows) ? rows.slice(0, 12) : [];
+  }
+  _expertPanel() {
+    const raw = this._lastRawMeasurements(),
+      strip = {
+        ...this._getLocalStrip(),
+        ...(this._state(this.config.strip_test_entity)?.attributes || {}),
+        ...(this._lastStripPayload || {}),
+      };
+    const rows = raw.length
+      ? raw
+          .slice(0, 12)
+          .map(
+            (r) =>
+              `<tr><td>${r.datetime || r.updated_at_local || this._formatDateTime?.(r.updated_at) || "—"}</td><td>${this._historySourceLabel(r.source)}</td><td>${r.ph ?? "—"}</td><td>${r.orp ?? "—"}</td><td>${r.temp ?? r.temperature ?? "—"}</td></tr>`,
+          )
+          .join("")
+      : "<tr><td colspan=5>Aucune donnée brute</td></tr>";
+    const v = (k, d = "") => strip[k] ?? d;
+    const tacF = this._toFrenchDeg(v("alkalinity", ""));
+    const thF = this._toFrenchDeg(v("calcium", ""));
+    const inp = (name, val, unit, icon, label, extra = "", cls = "") =>
+      `<div class="strip-row ${cls}"><ha-icon icon="${icon}"></ha-icon><b>${label}</b><input name="${name}" type="number" step="0.01" value="${val ?? ""}"><span>${unit}</span>${extra}</div>`;
+    const autoSt = this._fmtSmartStatus(
+      this._state(this._smartFiltrationEntity())?.state ||
+        this._state(
+          this.config.action_summary_entity || this.config.actions_entity,
+        )?.attributes?.auto_schedule_status ||
+        "—",
+    );
+    return `<div class="full-sheet expert-sheet"><div class="sheet-top"><button data-panel="menu"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>Mode Expert</h2><button data-panel=""><ha-icon icon="mdi:close"></ha-icon></button></div><div class="expert-scroll"><div class="section-title">Données brutes</div><div class="raw-box"><table><thead><tr><th>Date</th><th>Src</th><th>pH</th><th>ORP</th><th>Temp</th></tr></thead><tbody>${rows}</tbody></table></div><div class="section-title">Test bandelette</div><div class="strip-card"><div class="strip-tabs single"><button class="active">Formulaire</button></div><div class="strip-form analyseur_eau-strip">${inp("strip_ph", v("ph", ""), "", "mdi:palette-outline", "pH", `<input name="strip_temperature" type="number" step="0.1" value="${v("temperature", "")}"><span>°C</span>`, "ph-row")}${inp("strip_alkalinity", v("alkalinity", ""), "ppm", "mdi:snowflake", "TAC", `<input name="strip_alkalinity_f" data-convert-from="strip_alkalinity" type="number" step="0.1" value="${tacF}"><span>°f</span>`, "tac-row")}${inp("strip_calcium", v("calcium", ""), "ppm", "mdi:ellipse", "TH", `<input name="strip_calcium_f" data-convert-from="strip_calcium" type="number" step="0.1" value="${thF}"><span>°f</span>`, "th-row")}${inp("strip_cya", v("cya", ""), "ppm", "mdi:link-variant", "Stabilisant")}${inp("strip_free_chlorine", v("free_chlorine", ""), "ppm", "mdi:triangle-outline", "Chlore libre")}${inp("strip_total_chlorine", v("total_chlorine", ""), "ppm", "mdi:triangle", "Chlore total")}<button class="save-strip" data-save-strip="1">Valider</button></div></div>${this._stripRangesPanel(strip)}<div class="section-title">Diagnostic système</div><div class="diag"><div>Pompe<span>${this._state(this.config.pump_entity)?.state || "non configurée"}</span></div><div>Météo<span>${this._state(this.config.weather_entity)?.state || "non configurée"}</span></div><div>Filtration auto<span>${autoSt}</span></div></div>${this._smartFiltrationInfo()}${this._chlorineLsiPanel()}</div></div>`;
+  }
+
+  _chlorineLsiPanel() {
+    const a = this._chemistryIntel();
+    const mode = a.chlorine_mode_used === "estimated" ? "Estimé ORP" : "Mesuré";
+    const source = a.chlorine_source || "—";
+    const fc = a.estimated_free_chlorine ?? "—";
+    const hocl = a.active_chlorine ?? "—";
+    const pct = a.active_chlorine_percent ?? "—";
+    const power = a.disinfection_power || "—";
+    const cya =
+      this._state(this.config.strip_test_entity)?.attributes?.cya ??
+      a.cya ??
+      "—";
+    const lsi = a.lsi ?? "—";
+    const lsiStatus = this._lsiStatusLabel(a.lsi_status);
+    return `<div class="section-title">Intelligence chimique</div><div class="diag smart-diag"><div>Mode chlore<span>${mode}</span></div><div>Source chlore<span>${source}</span></div><div>Chlore libre estimé<span>${fc} ppm</span></div><div>Chlore actif HOCl<span>${hocl} ppm (${pct} %)</span></div><div>Pouvoir désinfectant<span>${power}</span></div><div>Stabilisant utilisé<span>${cya} ppm</span></div><div>LSI<span>${lsi} · ${lsiStatus}</span></div></div>`;
+  }
+  _cfgNum(k, def) {
+    const v = this.config?.[k];
+    const n = parseFloat(String(v ?? "").replace(",", "."));
+    return Number.isFinite(n) ? n : def;
+  }
+  _waterTempNumber() {
+    const raw = this._format(this.config?.water_temp_entity);
+    const n = parseFloat(
+      String(raw ?? "")
+        .replace(",", ".")
+        .replace(/[^0-9+\-.]/g, ""),
+    );
+    return Number.isFinite(n) ? n : null;
+  }
+
+  _alertStatusEntity() {
+    const c = this.config || {};
+    if (c.alert_status_entity) return c.alert_status_entity;
+    const p = this._poolNamePrefix ? this._poolNamePrefix() : "piscine";
+    const candidates = [
+      `sensor.${p}_etat_des_alertes`,
+      `sensor.${p}_alert_status`,
+      `sensor.piscine_etat_des_alertes`,
+      `sensor.piscine_alert_status`,
+    ];
+    return candidates.find((e) => this._state(e)) || candidates[0];
+  }
+  _hasRealAlert() {
+    const st = this._state(this._alertStatusEntity());
+    if (st) return String(st.state).toLowerCase() === "alerte";
+    const alerts = this._poolAlerts ? this._poolAlerts() : [];
+    return alerts.length > 0;
+  }
+  _poolAlertsEntity() {
+    const c = this.config || {};
+    if (c.pool_alerts_entity) return c.pool_alerts_entity;
+    const seeds = [
+      c.alerts_entity,
+      c.maintenance_journal_entity,
+      c.raw_measurements_entity,
+      c.filtration_duration_entity,
+    ].filter(Boolean);
+    for (const s of seeds) {
+      const id = String(s).replace(/^sensor\./, "");
+      const prefix = id.split("_")[0] || "piscine";
+      const candidates = [
+        `sensor.${prefix}_pool_alerts`,
+        `sensor.${prefix}_alertes_pool_pilot`,
+        `sensor.piscine_pool_alerts`,
+        `sensor.piscine_alertes_pool_pilot`,
+      ];
+      const found = candidates.find((e) => this._state(e));
+      if (found) return found;
+    }
+    return "sensor.piscine_pool_alerts";
+  }
+  _poolAlerts() {
+    const e = this._state(this._poolAlertsEntity());
+    const a = e?.attributes?.alerts;
+    return Array.isArray(a) ? a : [];
+  }
+  _poolAlertBadges() {
+    const alerts = this._poolAlerts();
+    if (!alerts.length)
+      return this._waterTempAlertBadges ? this._waterTempAlertBadges() : "";
+    const shown = alerts
+      .filter((a) =>
+        [
+          "water_cold",
+          "water_hot",
+          "green_algae_risk",
+          "stock_low",
+          "analyseur_eau_battery_low",
+          "storm",
+        ].includes(a.id),
+      )
+      .slice(0, 6);
+    if (!shown.length) return "";
+    return `<div class="water-alerts">${shown.map((a) => `<span class="water-alert-badge pool-alert-${a.id || ""}" title="${a.title || ""}"><ha-icon icon="${a.icon || "mdi:alert-circle-outline"}"></ha-icon></span>`).join("")}</div>`;
+  }
+  _waterTempAlertBadges() {
+    const t = this._waterTempNumber();
+    if (t === null) return "";
+    const min = this._cfgNum("water_temp_alert_min", 6);
+    const max = this._cfgNum("water_temp_alert_max", 31);
+    const b = [];
+    if (t < min)
+      b.push(
+        '<span class="water-alert-badge" title="Eau trop froide"><ha-icon icon="mdi:snowflake"></ha-icon></span>',
+      );
+    if (t > max)
+      b.push(
+        '<span class="water-alert-badge" title="Eau trop chaude"><ha-icon icon="mdi:thermometer"></ha-icon></span>',
+      );
+    return b.length ? `<div class="water-alerts">${b.join("")}</div>` : "";
+  }
+  _journalEntity() {
+    const c = this.config || {};
+    if (c.maintenance_journal_entity) return c.maintenance_journal_entity;
+    const seeds = [
+      c.strip_test_entity,
+      c.raw_measurements_entity,
+      c.filtration_duration_entity,
+      c.ph_entity,
+    ].filter(Boolean);
+    for (const s of seeds) {
+      const id = String(s).replace(/^sensor\./, "");
+      const prefix = id.split("_")[0] || "piscine";
+      const candidates = [
+        `sensor.${prefix}_maintenance_journal`,
+        `sensor.${prefix}_carnet_d_entretien`,
+        `sensor.${prefix}_carnet_entretien`,
+        `sensor.piscine_maintenance_journal`,
+        `sensor.piscine_carnet_d_entretien`,
+      ];
+      const found = candidates.find((e) => this._state(e));
+      if (found) return found;
+    }
+    return "sensor.piscine_maintenance_journal";
+  }
+  _journalEntries() {
+    const e = this._state(this._journalEntity());
+    return e?.attributes?.entries || e?.attributes?.journal || [];
+  }
+  _journalIcon(cat) {
+    return (
+      {
+        alert: "mdi:close",
+        water_quality: "mdi:close",
+        chemical: "mdi:bottle-tonic-outline",
+        stock: "mdi:package-variant-closed",
+        strip_test: "mdi:test-tube",
+        equipment: "mdi:tools",
+        maintenance: "mdi:tools",
+        cleaning: "mdi:broom",
+        filter: "mdi:filter-outline",
+        drain: "mdi:water-percent",
+        weather: "mdi:weather-lightning",
+        filtration: "mdi:sync",
+        note: "mdi:note-text-outline",
+      }[cat] || "mdi:note-text-outline"
+    );
+  }
+  _journalColor(cat) {
+    return (
+      {
+        alert: "#ff1515",
+        water_quality: "#ff1515",
+        chemical: "#459be8",
+        stock: "#c414d9",
+        strip_test: "#2fcbd0",
+        equipment: "#b914d9",
+        maintenance: "#b914d9",
+        cleaning: "#b914d9",
+        filter: "#b914d9",
+        drain: "#2ea8df",
+        weather: "#f59f18",
+        filtration: "#2fcbd0",
+        note: "#64748b",
+      }[cat] || "#64748b"
+    );
+  }
+  _journalById(id) {
+    return (
+      this._journalEntries().find((e) => String(e.id) === String(id)) || null
+    );
+  }
+  _journalDetailPanel() {
+    const e = this._journalById(this._selectedJournalId) || {};
+    const cat = e.category || "note",
+      color = e.color || this._journalColor(cat),
+      icon = e.icon || this._journalIcon(cat),
+      date = e.datetime || this._formatDateTime(e.date) || "",
+      title = e.title || e.category_label || "Note",
+      desc = e.description || "";
+    return `<div class="modal-backdrop journal-detail-backdrop" data-close="journal"><div class="journal-detail-sheet" style="--journal-detail-color:${color}"><div class="journal-detail-top"><span>${date}</span></div><div class="journal-detail-head"><ha-icon icon="${icon}"></ha-icon><strong>${title}</strong></div><div class="journal-detail-body"><p>${desc || "Aucun commentaire."}</p>${e.quantity ? `<p><b>Quantité :</b> ${e.quantity}${e.unit ? " " + e.unit : ""}</p>` : ""}${e.percent ? `<p><b>Taux :</b> ${e.percent}%</p>` : ""}<hr><button data-edit-journal="${e.id || ""}">Modifier</button><button class="danger" data-delete-journal="${e.id || ""}">Supprimer</button></div></div></div>`;
+  }
+  _journalEditPanel() {
+    const e = this._journalById(this._selectedJournalId) || {};
+    const cat = this._pendingJournalCat || e.category || "note";
+    return `<div class="full-sheet journal-form-sheet"><div class="journal-form-top"><button data-panel="journalDetail"><span>Annuler</span></button><button data-update-journal="${e.id || ""}"><strong>Enregistrer</strong></button></div><h2>Modifier item</h2><button class="journal-select-cat" data-panel="journalCats">${this._journalCategoryLabel(cat)}</button><label>Titre</label><input name="journal_title" value="${e.title || ""}"><label>Commentaire</label><textarea name="journal_comment">${e.description || ""}</textarea><div class="journal-date-pill"><span>Date</span><strong>${e.datetime || this._formatDateTime(e.date) || ""}</strong></div></div>`;
+  }
+  _journalPanel() {
+    const entries = this._journalEntries();
+    const rows = entries.length
+      ? entries
+          .slice(0, 100)
+          .map((e, i) => {
+            const side = i % 2 ? "right" : "left",
+              cat = e.category || "note",
+              color = e.color || this._journalColor(cat),
+              icon = e.icon || this._journalIcon(cat),
+              title = e.title || e.category_label || "Note",
+              date = e.datetime || this._formatDateTime(e.date) || "";
+            return `<button class="journal-item ${side}" data-journal-open="${e.id || ""}"><div class="journal-card"><span class="journal-icon" style="background:${color}"><ha-icon icon="${icon}"></ha-icon></span><strong>${title}</strong></div><div class="journal-date">${date}</div><span class="journal-dot"></span></button>`;
+          })
+          .join("")
+      : `<div class="journal-empty">Aucune entrée pour l'instant.</div>`;
+    return `<div class="full-sheet journal-sheet"><div class="journal-header"><button data-panel="menu"><ha-icon icon="mdi:close"></ha-icon></button><h2>Carnet d'entretien</h2><button data-panel="journalAdd"><ha-icon icon="mdi:plus"></ha-icon></button></div><div class="journal-scroll"><div class="journal-line"></div>${rows}</div></div>`;
+  }
+  _formatDateTime(v) {
+    if (v === undefined || v === null || v === "" || v === "—") return "—";
+    const s = String(v).trim();
+    let d = null;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s) || /^\d{4}-\d{2}-\d{2} /.test(s))
+      d = new Date(s);
+    if (d && Number.isFinite(d.getTime()))
+      return d
+        .toLocaleString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+        .replace(",", "");
+    return s
+      .replace("T", " ")
+      .replace(/\+00:00$/, "")
+      .replace(/Z$/, "")
+      .replace(/:\d{2}(?:\.\d+)?$/, "");
+  }
+  _lastMeasureDisplay() {
+    const e = (this.config || {}).last_measure_entity;
+    if (!e) return "—";
+    const st = this._state(e);
+    const raw =
+      st?.attributes?.updated_at_local ||
+      st?.attributes?.updated_at ||
+      st?.attributes?.datetime ||
+      st?.attributes?.date_time ||
+      st?.attributes?.last_update ||
+      st?.state ||
+      "—";
+    return this._formatDateTime(raw);
+  }
+  _journalCategoryLabel(c) {
+    return (
+      {
+        weather: "Événement climatique",
+        stock: "Gestion des stocks",
+        note: "Note",
+        strip_test: "Nouveau test de bandelettes",
+        equipment: "Nouvel équipement",
+        water_quality: "Qualité de l'eau",
+        cleaning: "Robot / aspirateur",
+        chemical: "Utilisation de produits chimiques",
+        drain: "Vidange de la piscine",
+        filtration: "Filtration",
+        maintenance: "Entretien",
+        filter: "Lavage filtre",
+      }[c] || c
+    );
+  }
+  _journalCategories() {
+    return [
+      "weather",
+      "stock",
+      "note",
+      "strip_test",
+      "equipment",
+      "water_quality",
+      "cleaning",
+      "chemical",
+      "drain",
+    ];
+  }
+  _journalCategoriesPanel() {
+    return `<div class="full-sheet journal-form-sheet"><div class="journal-form-top"><button data-panel="journalAdd"><ha-icon icon="mdi:chevron-left"></ha-icon></button><span>Catégories</span></div><h2>Catégories</h2><div class="journal-cats">${this._journalCategories()
+      .map(
+        (c) =>
+          `<button data-journal-cat="${c}">${this._journalCategoryLabel(c)}</button>`,
+      )
+      .join("")}</div></div>`;
+  }
+  _journalAddPanel() {
+    const c = this._pendingJournalCat || "note";
+    return `<div class="full-sheet journal-form-sheet"><div class="journal-form-top"><button data-panel="journal"><span>Annuler</span></button><button data-save-journal="1"><strong>Enregistrer</strong></button></div><h2>Nouvel item</h2><button class="journal-select-cat" data-panel="journalCats">${this._journalCategoryLabel(c)}</button><label>Commentaire</label><textarea name="journal_comment"></textarea><div class="journal-date-pill"><span>Date</span><strong>${new Date().toLocaleString("fr-FR", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</strong></div></div>`;
+  }
+
+  _entityByCandidates(explicitKey, candidates) {
+    const c = this.config || {};
+    if (c[explicitKey]) return c[explicitKey];
+    for (const e of candidates) {
+      if (this._state(e)) return e;
+    }
+    return candidates[0] || "";
+  }
+  _poolNamePrefix() {
+    const seeds = [
+      this.config?.pool_alerts_entity,
+      this.config?.maintenance_journal_entity,
+      this.config?.raw_measurements_entity,
+      this.config?.filtration_duration_entity,
+      this.config?.ph_entity,
+    ].filter(Boolean);
+    for (const s of seeds) {
+      const id = String(s).replace(/^[a-z_]+\./, "");
+      const p = id.split("_")[0];
+      if (p) return p;
+    }
+    return "piscine";
+  }
+  _numEntity(key) {
+    const p = this._poolNamePrefix();
+    const map = {
+      target_ph: [`number.${p}_ph_cible`, `number.${p}_target_ph`],
+      target_fc: [`number.${p}_chlore_libre_cible`, `number.${p}_target_fc`],
+      filter_coef: [
+        `number.${p}_coefficient_de_filtration`,
+        `number.${p}_filter_coef`,
+      ],
+      min_filter_hours: [
+        `number.${p}_filtration_minimum`,
+        `number.${p}_min_filter_hours`,
+      ],
+      max_filter_hours: [
+        `number.${p}_filtration_maximum`,
+        `number.${p}_max_filter_hours`,
+      ],
+      water_temp_alert_min: [
+        `number.${p}_seuil_eau_trop_froide`,
+        `number.${p}_water_temp_alert_min`,
+      ],
+      water_temp_alert_max: [
+        `number.${p}_seuil_eau_trop_chaude`,
+        `number.${p}_water_temp_alert_max`,
+      ],
+      algae_risk_sensitivity: [
+        `number.${p}_seuil_risque_d_algues`,
+        `number.${p}_algae_risk_sensitivity`,
+      ],
+      filtration_center_hour: [
+        `number.${p}_heure_centrale_filtration`,
+        `number.${p}_filtration_center_hour`,
+      ],
+    };
+    return this._entityByCandidates(`${key}_entity`, map[key] || []);
+  }
+  _selectEntity(key) {
+    const p = this._poolNamePrefix();
+    const map = {
+      filtration_placement_mode: [
+        `select.${p}_placement_de_la_filtration_automatique`,
+        `select.${p}_placement_filtration_automatique`,
+        `select.${p}_filtration_placement_mode`,
+      ],
+    };
+    return this._entityByCandidates(`${key}_entity`, map[key] || []);
+  }
+  _timeEntity(key) {
+    const p = this._poolNamePrefix();
+    const map = {
+      auto_start_time: [
+        `time.${p}_heure_de_debut_minimale`,
+        `time.${p}_auto_start_time`,
+      ],
+      auto_end_time: [
+        `time.${p}_heure_de_fin_maximale`,
+        `time.${p}_auto_end_time`,
+      ],
+    };
+    return this._entityByCandidates(`${key}_entity`, map[key] || []);
+  }
+  _numValue(key, def = "") {
+    const e = this._numEntity(key);
+    const v = this._value(e, "");
+    return v === "" || v === "unknown" || v === "unavailable" ? def : v;
+  }
+  _selectValue(key, def = "") {
+    const v = this._value(this._selectEntity(key), "");
+    return v === "" || v === "unknown" || v === "unavailable" ? def : v;
+  }
+  _timeValue(key, def = "") {
+    const v = this._value(this._timeEntity(key), "");
+    if (v === "" || v === "unknown" || v === "unavailable") return def;
+    const match = String(v).match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return def;
+    return `${String(match[1]).padStart(2, "0")}:${match[2]}`;
+  }
+  _filtrationPlacementMode() {
+    return this._selectValue("filtration_placement_mode", "centered") ===
+      "window"
+      ? "window"
+      : "centered";
+  }
+  _settingsRow(label, key, unit, step = "0.1") {
+    return `<div class="settings-row"><label>${label}</label><input name="${key}" type="number" step="${step}" value="${this._numValue(key, "")}"><span>${unit || ""}</span></div>`;
+  }
+  _settingsTimeRow(label, key, fallback) {
+    return `<div class="settings-row settings-time-row"><label>${label}</label><input name="${key}" type="time" step="60" value="${this._timeValue(key, fallback)}"><span></span></div>`;
+  }
+  _filtrationPlacementSettings() {
+    const mode = this._filtrationPlacementMode();
+    return `<div class="settings-select-row"><label>Placement de la filtration automatique</label><select name="filtration_placement_mode" data-filtration-placement><option value="centered" ${mode === "centered" ? "selected" : ""}>Centrer autour d’une heure</option><option value="window" ${mode === "window" ? "selected" : ""}>Respecter une plage horaire</option></select></div><div data-placement-centered ${mode === "centered" ? "" : "hidden"}>${this._settingsRow("Heure centrale filtration", "filtration_center_hour", "h", "0.5")}</div><div data-placement-window ${mode === "window" ? "" : "hidden"}>${this._settingsTimeRow("Heure de début minimale", "auto_start_time", "07:00")}${this._settingsTimeRow("Heure de fin maximale", "auto_end_time", "22:00")}</div>`;
+  }
+  _syncFiltrationPlacementFields() {
+    const mode =
+      this.shadowRoot.querySelector('[name="filtration_placement_mode"]')
+        ?.value || "centered";
+    const centered = this.shadowRoot.querySelector("[data-placement-centered]");
+    const windowFields = this.shadowRoot.querySelector(
+      "[data-placement-window]",
+    );
+    if (centered) centered.hidden = mode !== "centered";
+    if (windowFields) windowFields.hidden = mode !== "window";
+  }
+
+  _notificationPrefs() {
+    const ents = [
+      this._alertStatusEntity(),
+      this.config.actions_entity,
+      this.config.alert_entity,
+      this.config.action_summary_entity,
+    ].filter(Boolean);
+    for (const e of ents) {
+      const a = this._state(e)?.attributes?.notification_preferences;
+      if (a) return a;
+    }
+    return {};
+  }
+  _notifyInput(name, def = "") {
+    const p = this._notificationPrefs();
+    return p[name] ?? def;
+  }
+  _notifyChecked(name, def = false) {
+    const v = this._notifyInput(name, def);
+    return v === true || v === "true" || v === "on" || v === 1 || v === "1";
+  }
+  _notifySelectedServices() {
+    const p = this._notificationPrefs();
+    let v = p.mobile_services ?? p.notify_mobile_services ?? "";
+    if (Array.isArray(v))
+      return v.map((x) =>
+        String(x).startsWith("notify.") ? String(x) : "notify." + String(x),
+      );
+    return String(v || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .map((x) => (x.startsWith("notify.") ? x : "notify." + x));
+  }
+  _notifyAvailableServices() {
+    const p = this._notificationPrefs();
+    let v = p.available_mobile_services ?? p.available_notify_services ?? [];
+    if (!Array.isArray(v)) v = String(v || "").split(",");
+    const selected = this._notifySelectedServices();
+    const all = [
+      ...v.map((x) => String(x).trim()).filter(Boolean),
+      ...selected,
+    ];
+    return [
+      ...new Set(all.map((x) => (x.startsWith("notify.") ? x : "notify." + x))),
+    ];
+  }
+  _notifyServicesChoices() {
+    const available = this._notifyAvailableServices();
+    const selected = this._notifySelectedServices();
+    if (!available.length)
+      return `<input name="notify_mobile_services" type="text" placeholder="notify.mobile_app_iphone, notify.mobile_app_ipad" value="${selected.join(",")}">`;
+    return `<div class="notify-list">${available.map((s) => `<label class="check"><input type="checkbox" name="notify_service" value="${s}" ${selected.includes(s) ? "checked" : ""}>${s}</label>`).join("")}</div>`;
+  }
+  _notifyServicesDefault() {
+    const p = this._notificationPrefs();
+    let v = p.mobile_services ?? p.notify_mobile_services ?? "";
+    if (Array.isArray(v)) v = v.join(",");
+    return v || "";
+  }
+
+  _settingsPanel() {
+    return `<div class="full-sheet settings-sheet"><div class="sheet-top"><button data-panel="menu"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>Paramètres</h2><button data-panel=""><ha-icon icon="mdi:close"></ha-icon></button></div><div class="settings-scroll"><div class="section-title">Filtration</div><div class="settings-card">${this._filtrationPlacementSettings()}${this._settingsRow("Coefficient de filtration", "filter_coef", "", "0.1")}${this._settingsRow("Durée minimale", "min_filter_hours", "h", "0.5")}${this._settingsRow("Durée maximale", "max_filter_hours", "h", "0.5")}</div><div class="section-title">Qualité d’eau</div><div class="settings-card">${this._settingsRow("pH cible", "target_ph", "", "0.1")}${this._settingsRow("Chlore libre cible", "target_fc", "ppm", "0.1")}</div><div class="section-title">Alertes</div><div class="settings-card">${this._settingsRow("Eau trop froide", "water_temp_alert_min", "°C", "0.1")}${this._settingsRow("Eau trop chaude", "water_temp_alert_max", "°C", "0.1")}${this._settingsRow("Seuil risque algues", "algae_risk_sensitivity", "%", "1")}</div><div class="section-title">Notifications</div><div class="settings-card notify-settings"><label class="check"><input type="checkbox" name="notify_enabled" ${this._notifyChecked("enabled", false) ? "checked" : ""}>Activer les notifications Pool Pilot</label><label class="check"><input type="checkbox" name="notify_persistent" ${this._notifyChecked("persistent", true) ? "checked" : ""}>Notification persistante Home Assistant</label><div class="notify-label">Téléphones / services notify</div>${this._notifyServicesChoices()}<label class="check"><input type="checkbox" name="notify_alerts_enabled" ${this._notifyChecked("alerts_enabled", true) ? "checked" : ""}>Alertes Pool Pilot</label><label class="check"><input type="checkbox" name="notify_recommendations_enabled" ${this._notifyChecked("recommendations_enabled", true) ? "checked" : ""}>Recommandations produit</label><label class="check"><input type="checkbox" name="notify_filtration_enabled" ${this._notifyChecked("filtration_enabled", false) ? "checked" : ""}>Filtration automatique</label><label class="check"><input type="checkbox" name="notify_stock_low_enabled" ${this._notifyChecked("stock_low_enabled", true) ? "checked" : ""}>Stock faible</label><label class="check"><input type="checkbox" name="notify_battery_low_enabled" ${this._notifyChecked("battery_low_enabled", true) ? "checked" : ""}>Batterie faible</label><label class="check"><input type="checkbox" name="notify_strip_test_enabled" ${this._notifyChecked("strip_test_enabled", false) ? "checked" : ""}>Rappel test bandelette</label><label>Délai rappel bandelette <input name="notify_strip_test_days" type="number" step="1" min="1" max="30" value="${this._notifyInput("strip_test_days", 7)}"></label><label class="check"><input type="checkbox" name="notify_daily_summary_enabled" ${this._notifyChecked("daily_summary_enabled", false) ? "checked" : ""}>Résumé quotidien</label><label>Heure résumé <input name="notify_daily_summary_time" type="text" placeholder="09:00" value="${this._notifyInput("daily_summary_time", "09:00")}"></label><button class="secondary" data-test-notification="1">Envoyer une notification de test</button><div class="settings-help">Tout est exécuté par l’intégration Pool Pilot. Aucune automatisation Home Assistant n’est nécessaire.</div></div><div class="settings-actions"><button data-panel="menu">Annuler</button><button class="primary" data-save-settings="1">Valider</button></div><div class="settings-help">Les valeurs sont envoyées à Pool Pilot au clic sur Valider. Les alertes affichées par la carte viennent ensuite de l’intégration.</div></div></div>`;
+  }
+  _saveSettings() {
+    const fields = [
+      "filter_coef",
+      "min_filter_hours",
+      "max_filter_hours",
+      "target_ph",
+      "target_fc",
+      "water_temp_alert_min",
+      "water_temp_alert_max",
+      "algae_risk_sensitivity",
+      "filtration_center_hour",
+    ];
+    const calls = [];
+    for (const key of fields) {
+      const input = this.shadowRoot.querySelector(`[name="${key}"]`);
+      if (!input) continue;
+      const val = parseFloat(String(input.value).replace(",", "."));
+      if (!Number.isFinite(val)) continue;
+      const ent = this._numEntity(key);
+      if (!ent || !this._state(ent)) continue;
+      calls.push(
+        this._hass.callService("number", "set_value", {
+          entity_id: ent,
+          value: val,
+        }),
+      );
+    }
+
+    const placement =
+      this.shadowRoot.querySelector('[name="filtration_placement_mode"]')
+        ?.value || "centered";
+    const placementEntity = this._selectEntity("filtration_placement_mode");
+    if (placementEntity && this._state(placementEntity)) {
+      calls.push(
+        this._hass.callService("select", "select_option", {
+          entity_id: placementEntity,
+          option: placement,
+        }),
+      );
+    }
+
+    if (placement === "window") {
+      for (const [key, fallback] of [
+        ["auto_start_time", "07:00"],
+        ["auto_end_time", "22:00"],
+      ]) {
+        const input = this.shadowRoot.querySelector(`[name="${key}"]`);
+        const entity = this._timeEntity(key);
+        const raw = input?.value || fallback;
+        if (!entity || !this._state(entity) || !/^\d{2}:\d{2}$/.test(raw))
+          continue;
+        calls.push(
+          this._hass.callService("time", "set_value", {
+            entity_id: entity,
+            time: `${raw}:00`,
+          }),
+        );
+      }
+    }
+
+    let services = [
+      ...this.shadowRoot.querySelectorAll('[name="notify_service"]:checked'),
+    ]
+      .map((i) => String(i.value || "").trim())
+      .filter(Boolean);
+    const manual = this.shadowRoot.querySelector(
+      '[name="notify_mobile_services"]',
+    )?.value;
+    if (manual)
+      services = manual
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+    services = [
+      ...new Set(
+        services.map((service) =>
+          service.startsWith("notify.") ? service : `notify.${service}`,
+        ),
+      ),
+    ];
+    const days = parseInt(
+      this.shadowRoot.querySelector('[name="notify_strip_test_days"]')?.value ||
+        "7",
+      10,
+    );
+    const prefs = {
+      enabled: !!this.shadowRoot.querySelector('[name="notify_enabled"]')
+        ?.checked,
+      persistent: !!this.shadowRoot.querySelector('[name="notify_persistent"]')
+        ?.checked,
+      mobile_services: services.join(","),
+      alerts_enabled: !!this.shadowRoot.querySelector(
+        '[name="notify_alerts_enabled"]',
+      )?.checked,
+      recommendations_enabled: !!this.shadowRoot.querySelector(
+        '[name="notify_recommendations_enabled"]',
+      )?.checked,
+      filtration_enabled: !!this.shadowRoot.querySelector(
+        '[name="notify_filtration_enabled"]',
+      )?.checked,
+      stock_low_enabled: !!this.shadowRoot.querySelector(
+        '[name="notify_stock_low_enabled"]',
+      )?.checked,
+      battery_low_enabled: !!this.shadowRoot.querySelector(
+        '[name="notify_battery_low_enabled"]',
+      )?.checked,
+      strip_test_enabled: !!this.shadowRoot.querySelector(
+        '[name="notify_strip_test_enabled"]',
+      )?.checked,
+      strip_test_days: Number.isFinite(days)
+        ? Math.max(1, Math.min(30, days))
+        : 7,
+      daily_summary_enabled: !!this.shadowRoot.querySelector(
+        '[name="notify_daily_summary_enabled"]',
+      )?.checked,
+      daily_summary_time:
+        this.shadowRoot.querySelector('[name="notify_daily_summary_time"]')
+          ?.value || "09:00",
+    };
+    calls.push(
+      this._hass
+        .callService("pool_pilot", "set_notification_preferences", prefs)
+        .catch((err) => {
+          console.warn("Pool Pilot notification prefs failed", err);
+        }),
+    );
+    Promise.allSettled(calls).then((results) => {
+      const failed = results.some((result) => result.status === "rejected");
+      if (failed)
+        console.warn("Pool Pilot: one or more settings could not be saved");
+      this._panel = failed ? "settings" : "menu";
+      this.render();
+    });
+  }
+  _historyEntities() {
+    const c = this.config || {},
+      mode = this._resolvedDisinfectionMode();
+    return [
+      {
+        key: "temperature",
+        label: "Température",
+        unit: "°C",
+        entity: c.water_temp_entity,
+      },
+      { key: "ph", label: "pH", unit: "", entity: c.ph_entity },
+      {
+        key: "disinfection",
+        label: mode === "chlorine" ? "Chlore libre" : "ORP / RedOx",
+        unit: mode === "chlorine" ? "ppm" : "mV",
+        entity: mode === "chlorine" ? c.chlorine_entity : c.orp_entity,
+      },
+    ].filter((x) => x.entity);
+  }
+  _historyRange(period) {
+    const now = new Date(),
+      hours = period === "30d" ? 720 : period === "7d" ? 168 : 24;
+    return { start: new Date(now.getTime() - hours * 3600000), end: now };
+  }
+  async _loadHistory(
+    period = this._historyPeriod ||
+      this.config?.history_default_period ||
+      "24h",
+  ) {
+    if (!this._hass || this._historyLoading) return;
+    this._historyPeriod = period;
+    this._historyLoading = true;
+    this._historyError = "";
+    this._renderPreservingScroll();
+    try {
+      const ents = this._historyEntities(),
+        ids = ents.map((x) => x.entity).join(","),
+        r = this._historyRange(period),
+        path = `history/period/${encodeURIComponent(r.start.toISOString())}?filter_entity_id=${encodeURIComponent(ids)}&end_time=${encodeURIComponent(r.end.toISOString())}&minimal_response&no_attributes&significant_changes_only=0`;
+      const rows = ids ? await this._hass.callApi("GET", path) : [];
+      this._historyData = {};
+      for (let i = 0; i < ents.length; i++) {
+        const values = (rows?.[i] || [])
+          .map((x) => ({
+            t: new Date(x.last_changed || x.last_updated).getTime(),
+            v: parseFloat(String(x.state).replace(",", ".")),
+          }))
+          .filter((x) => Number.isFinite(x.t) && Number.isFinite(x.v));
+        this._historyData[ents[i].key] = values;
+      }
+    } catch (err) {
+      console.warn("Pool Pilot history failed", err);
+      this._historyError =
+        "Historique indisponible. Vérifiez que Recorder est actif.";
+    } finally {
+      this._historyLoading = false;
+      if (this._panel === "history") this._renderPreservingScroll();
+    }
+  }
+  _scheduleHistoryRefresh() {
+    if (this._historyLoading || this._historyRefreshTimer) return;
+    this._historyRefreshTimer = setTimeout(() => {
+      this._historyRefreshTimer = null;
+      if (this._panel === "history" && !this._historyData) this._loadHistory();
+    }, 250);
+  }
+  _historyChart(def) {
+    const rows = this._historyData?.[def.key] || [],
+      w = 620,
+      h = 220,
+      p = 28;
+    if (!rows.length)
+      return `<div class="history-empty">Aucune donnée disponible pour ${def.label}.</div>`;
+    let min = Math.min(...rows.map((x) => x.v)),
+      max = Math.max(...rows.map((x) => x.v));
+    if (min === max) {
+      min -= 1;
+      max += 1;
+    }
+    const t0 = rows[0].t,
+      t1 = rows[rows.length - 1].t || t0 + 1,
+      pts = rows
+        .map(
+          (x) =>
+            `${p + ((x.t - t0) / (t1 - t0 || 1)) * (w - 2 * p)},${h - p - ((x.v - min) / (max - min)) * (h - 2 * p)}`,
+        )
+        .join(" "),
+      last = rows[rows.length - 1].v,
+      fmt =
+        def.key === "ph"
+          ? last.toFixed(2).replace(".", ",")
+          : def.key === "disinfection" && def.unit === "mV"
+            ? Math.round(last)
+            : last.toFixed(1).replace(".", ",");
+    return `<div class="history-card"><div class="history-head"><div><strong>${def.label}</strong><span>${rows.length} points</span></div><b>${fmt}${def.unit ? " " + def.unit : ""}</b></div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><line x1="${p}" y1="${p}" x2="${p}" y2="${h - p}"/><line x1="${p}" y1="${h - p}" x2="${w - p}" y2="${h - p}"/><polyline points="${pts}"/></svg><div class="history-scale"><span>${min.toFixed(def.key === "ph" ? 2 : 1).replace(".", ",")} ${def.unit}</span><span>${max.toFixed(def.key === "ph" ? 2 : 1).replace(".", ",")} ${def.unit}</span></div></div>`;
+  }
+  _historyPanel() {
+    const period =
+        this._historyPeriod || this.config?.history_default_period || "24h",
+      defs = this._historyEntities();
+    if (!this._historyData && !this._historyLoading)
+      this._scheduleHistoryRefresh();
+    return `<div class="full-sheet history-sheet"><div class="sheet-top"><button data-panel="menu"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>Historique</h2><button data-history-refresh="1"><ha-icon icon="mdi:refresh"></ha-icon></button></div><div class="history-scroll"><div class="history-periods">${[
+      ["24h", "24 h"],
+      ["7d", "7 jours"],
+      ["30d", "30 jours"],
+    ]
+      .map(
+        ([v, l]) =>
+          `<button class="${period === v ? "active" : ""}" data-history-period="${v}">${l}</button>`,
+      )
+      .join(
+        "",
+      )}</div>${this._historyLoading ? '<div class="history-loading"><ha-icon icon="mdi:loading"></ha-icon> Chargement…</div>' : this._historyError ? `<div class="history-error">${this._historyError}</div>` : defs.map((d) => this._historyChart(d)).join("")}</div></div>`;
+  }
+
+  _menuPanel() {
+    return `<div class="menu-backdrop" data-close="1"><div class="menu-sheet"><button class="close" data-close="1"><ha-icon icon="mdi:close"></ha-icon></button><div class="logo">pool pilot</div><button data-panel="history"><ha-icon icon="mdi:chart-line"></ha-icon>Historique</button><button data-panel="journal"><ha-icon icon="mdi:timeline-clock-outline"></ha-icon>Carnet d’entretien</button><button data-panel="poolhouse"><ha-icon icon="mdi:home-outline"></ha-icon>Pool House</button><button data-panel="expert"><ha-icon icon="mdi:star-outline"></ha-icon>Mode Expert</button><button data-panel="taylor"><ha-icon icon="mdi:scale-balance"></ha-icon>Balance de Taylor</button><button data-panel="settings"><ha-icon icon="mdi:cog-outline"></ha-icon>Paramètres</button></div></div>`;
+  }
+
+  _alertStatusEntity() {
+    const c = this.config || {};
+    if (c.alert_status_entity) return c.alert_status_entity;
+    const p = this._poolNamePrefix ? this._poolNamePrefix() : "piscine";
+    const candidates = [
+      `sensor.${p}_etat_des_alertes`,
+      `sensor.${p}_alert_status`,
+      `sensor.piscine_etat_des_alertes`,
+      `sensor.piscine_alert_status`,
+    ];
+    return candidates.find((e) => this._state(e)) || candidates[0];
+  }
+  _primaryAlert() {
+    const s = this._state(this._alertStatusEntity());
+    const p = s?.attributes?.primary_alert;
+    if (p) return p;
+    const a = this._poolAlerts ? this._poolAlerts() : [];
+    return a && a.length ? a[0] : null;
+  }
+  _alertSteps(alert) {
+    if (alert?.steps && Array.isArray(alert.steps) && alert.steps.length)
+      return alert.steps;
+    const id = alert?.id || "";
+    if (id === "storm")
+      return [
+        "Sortez immédiatement les baigneurs de l'eau.",
+        "Retirez les bouées et les objets pouvant s'envoler. Le capteur peut rester dans la piscine.",
+        "Vérifiez le niveau d'eau et abaissez la ligne d'eau d'environ 3 cm si nécessaire.",
+        "En cas de forte activité électrique, coupez l'alimentation de la pompe et des équipements électriques.",
+        "Après l'orage, contrôlez le pH, le chlore et relancez la filtration si elle a été arrêtée.",
+      ];
+    if (id === "green_algae_risk")
+      return [
+        "Réalisez un traitement au chlore choc.",
+        "Contrôlez le pH avant le traitement.",
+        "Brossez les parois et le fond du bassin.",
+        "Filtration continue pendant 24 à 48 h.",
+      ];
+    if (id === "water_cold")
+      return [
+        "Activez la pompe à chaleur.",
+        "Vérifiez la consigne de chauffage.",
+        "Laissez la filtration fonctionner normalement.",
+      ];
+    if (id === "water_hot")
+      return [
+        "Activez le refroidissement de la PAC si disponible.",
+        "Augmentez la filtration pendant les heures les plus chaudes.",
+        "Contrôlez le pH et le chlore quotidiennement.",
+      ];
+    if (id === "stock_low")
+      return [
+        "Réapprovisionnez le produit indiqué dans le Pool House.",
+        "Mettez à jour le stock après achat.",
+      ];
+    if (id === "analyseur_eau_battery_low")
+      return [
+        "Remplacez ou rechargez la batterie du capteur.",
+        "Vérifiez que les mesures remontent de nouveau.",
+      ];
+    return ["Suivez les conseils ci-dessous pour résoudre le problème."];
+  }
+  _alertTitle(alert) {
+    return alert?.title || "Action recommandée";
+  }
+  _alertIcon(alert) {
+    return alert?.icon || "mdi:alert-outline";
+  }
+
+  _vigilanceEntity() {
+    const c = this.config || {};
+    if (c.vigilance_entity) return c.vigilance_entity;
+    const p = this._poolNamePrefix ? this._poolNamePrefix() : "piscine";
+    const candidates = [
+      `sensor.${p}_vigilance_pool_pilot`,
+      `sensor.${p}_vigilance`,
+      `sensor.piscine_vigilance_pool_pilot`,
+      `sensor.piscine_vigilance`,
+    ];
+    return candidates.find((e) => this._state(e)) || candidates[0];
+  }
+  _vigilanceData() {
+    const direct = this._state(this._vigilanceEntity())?.attributes;
+    if (direct && Object.keys(direct).length) return direct;
+    const s = this._state(
+      this._alertStatusEntity
+        ? this._alertStatusEntity()
+        : this.config?.alert_status_entity,
+    );
+    return s?.attributes?.vigilance || {};
+  }
+  _vigilancePanel() {
+    const v = this._vigilanceData() || {},
+      points = Array.isArray(v.points) ? v.points : [],
+      score = v.score ?? 0,
+      title = v.title || "Vigilance en cours",
+      summary = v.summary || "Pool Pilot surveille plusieurs indicateurs.",
+      why = v.why_not_alert || "Aucun seuil critique n’est dépassé.",
+      advice = Array.isArray(v.advice) ? v.advice : [];
+    const rows = points.length
+      ? points
+          .map(
+            (p) =>
+              `<div class="vig-point"><ha-icon icon="${p.icon || "mdi:eye-outline"}"></ha-icon><div><strong>${p.title || ""}</strong><span>${p.message || ""}</span>${p.value !== undefined && p.value !== null ? `<em>${p.value}</em>` : ""}</div><b>+${p.contribution || 0}%</b></div>`,
+          )
+          .join("")
+      : '<div class="vig-empty">Aucun facteur précis remonté pour le moment.</div>';
+    return `<div class="modal-backdrop" data-close="1"><div class="alert-sheet vigilance-sheet"><button class="close" data-close="1"><ha-icon icon="mdi:close"></ha-icon></button><h1>${title}</h1><div class="vig-score"><span>Indice de vigilance</span><strong>${score}%</strong></div><p class="vig-summary">${summary}</p><div class="vig-section"><h3>Pourquoi ?</h3>${rows}</div><div class="vig-section"><h3>Pourquoi ce n’est pas une alerte ?</h3><p>${why}</p></div>${advice.length ? `<div class="vig-section"><h3>Conseils</h3>${advice.map((a) => `<p>✓ ${a}</p>`).join("")}</div>` : ""}<div class="alert-actions"><button data-close="1">Fermer</button><button class="done" data-done="6">J’ai compris <ha-icon icon="mdi:check-circle-outline"></ha-icon></button></div></div></div>`;
+  }
+  _alertPanel() {
+    const c = this.config || {},
+      alert = this._primaryAlert(),
+      steps = this._alertSteps(alert),
+      title = this._alertTitle(alert),
+      icon = this._alertIcon(alert),
+      message =
+        alert?.message ||
+        "Suivez les conseils ci-dessous pour résoudre le problème.",
+      stepHtml = steps
+        .map((s, i) => `<div><b>${i + 1}</b><span>${s}</span></div>`)
+        .join("");
+    return `<div class="modal-backdrop" data-close="1"><div class="alert-sheet"><button class="close" data-close="1"><ha-icon icon="mdi:close"></ha-icon></button><h1>Alerte en cours</h1><div class="alert-head alert-head-orange"><ha-icon icon="${icon}"></ha-icon><strong>${title} - ${c.title || "Piscine"}</strong><span>${message}</span></div><div class="steps">${stepHtml}</div><div class="alert-actions"><button data-snooze="6">Plus tard</button><button class="done" data-done="24">C’est fait <ha-icon icon="mdi:check-circle-outline"></ha-icon></button></div></div></div>`;
+  }
+
+  _weatherIcon(state) {
+    const v = this._norm(state);
+    if (/sunny|clear|soleil/.test(v)) return "mdi:weather-sunny";
+    if (/partly|partiel|partlycloudy|cloudy-partly/.test(v))
+      return "mdi:weather-partly-cloudy";
+    if (/cloud|nuage/.test(v)) return "mdi:weather-cloudy";
+    if (/rain|pluie|pouring/.test(v)) return "mdi:weather-pouring";
+    if (/lightning|storm|orage|thunder/.test(v)) return "mdi:weather-lightning";
+    if (/snow|neige|verglas|hail|grele/.test(v)) return "mdi:weather-snowy";
+    if (/fog|brouillard/.test(v)) return "mdi:weather-fog";
+    if (/wind|vent/.test(v)) return "mdi:weather-windy";
+    return "mdi:weather-partly-cloudy";
+  }
+  _forecastFromAttributes() {
+    const st = this._state(this.config.weather_entity);
+    const a = st?.attributes || {};
+    const candidates = [
+      a.forecast,
+      a.forecast_hourly,
+      a.forecast_daily,
+      a.forecasts,
+      a.daily,
+      a.hourly,
+      a["forecast hourly"],
+      a["forecast daily"],
+    ];
+    for (const f of candidates) {
+      if (Array.isArray(f) && f.length) {
+        const item = f.find((x) => x && (x.condition || x.state)) || f[0];
+        return item?.condition || item?.state || "";
+      }
+    }
+    return "";
+  }
+  _pickForecastCondition(r, e) {
+    const buckets = [
+      r?.forecast,
+      r?.[e]?.forecast,
+      r?.response?.[e]?.forecast,
+      r?.service_response?.[e]?.forecast,
+    ];
+    for (const f of buckets) {
+      if (Array.isArray(f) && f.length) {
+        const item = f.find((x) => x && (x.condition || x.state)) || f[0];
+        return item?.condition || item?.state || "";
+      }
+    }
+    return "";
+  }
+  _ensureWeatherForecast() {
+    const e = this.config?.weather_entity;
+    if (!e || !this._hass || this._forecastLoading === e) return;
+    const fromAttr = this._forecastFromAttributes();
+    if (fromAttr) {
+      this._weatherNextState = fromAttr;
+      return;
+    }
+    this._forecastLoading = e;
+    const loadWs = async (type) => {
+      try {
+        const r = await this._hass.callWS({
+          type: "weather/forecast",
+          entity_id: e,
+          forecast_type: type,
+        });
+        return this._pickForecastCondition(r, e);
+      } catch (err) {}
+      try {
+        const r = await this._hass.callWS({
+          type: "weather/get_forecasts",
+          entity_ids: [e],
+          forecast_type: type,
+        });
+        return this._pickForecastCondition(r, e);
+      } catch (err) {}
+      try {
+        const r = await this._hass.callWS({
+          type: "weather/get_forecasts",
+          entity_id: e,
+          forecast_type: type,
+        });
+        return this._pickForecastCondition(r, e);
+      } catch (err) {}
+      try {
+        const r = await this._hass.callWS({
+          type: "execute_script",
+          sequence: [
+            {
+              service: "weather.get_forecasts",
+              target: { entity_id: e },
+              data: { type: type },
+              response_variable: "forecast",
+            },
+          ],
+        });
+        return this._pickForecastCondition(r?.forecast || r, e);
+      } catch (err) {}
+      return "";
+    };
+    Promise.resolve().then(async () => {
+      const next = (await loadWs("hourly")) || (await loadWs("daily"));
+      this._weatherNextState = next || this._state(e)?.state || "";
+      this._weatherForecastTried = true;
+      if (!this._panel) this.render();
+      this._forecastLoading = null;
+    });
+  }
+  _weatherForecastState() {
+    return this._forecastFromAttributes() || this._weatherNextState || "";
+  }
+  _vigilanceLevelFromRaw(raw) {
+    const v = this._norm(raw);
+    if (
+      !v ||
+      [
+        "green",
+        "vert",
+        "0",
+        "none",
+        "aucune",
+        "ok",
+        "off",
+        "unknown",
+        "unavailable",
+      ].includes(v)
+    )
+      return null;
+    if (/rouge|red|3|4/.test(v)) return "red";
+    if (/orange|2/.test(v)) return "orange";
+    if (/jaune|yellow|1/.test(v)) return "yellow";
+    return null;
+  }
+  _vigilanceLevel(entity) {
+    return this._vigilanceLevelFromRaw(this._value(entity, ""));
+  }
+  _weatherAlertAttr(entity, names) {
+    const st = this._state(entity);
+    if (!st || !st.attributes) return "";
+    const attrs = st.attributes;
+    const wanted = names.map((n) => this._norm(n));
+    for (const [k, v] of Object.entries(attrs)) {
+      const nk = this._norm(k).replace(/[_\s]+/g, "-");
+      if (wanted.some((w) => nk === w || nk.includes(w) || w.includes(nk)))
+        return v;
+    }
+    return "";
+  }
+  _weatherHasSeriousAlert() {
+    const c = this.config || {};
+    const alertEntity = c.weather_alert_entity;
+    if (!alertEntity) return false;
+    const defs = [
+      ["Orages", "orage", "storm", "thunderstorm"],
+      ["Vent violent", "vent-violent", "wind"],
+      ["Pluie-inondation", "pluie-inondation", "rain-flood", "rain"],
+      ["Canicule", "heatwave", "heat"],
+      ["Neige-verglas", "neige-verglas", "snow-ice", "snow"],
+    ];
+    return defs.some((names) => {
+      const lvl = this._vigilanceLevelFromRaw(
+        this._weatherAlertAttr(alertEntity, names),
+      );
+      return lvl === "orange" || lvl === "red";
+    });
+  }
+  _weatherAlertBadges() {
+    const c = this.config || {};
+    if (!c.show_weather_alerts) return "";
+    const alertEntity = c.weather_alert_entity;
+    const defs = [
+      {
+        old: "weather_alert_wind_entity",
+        attr: ["Vent violent", "vent-violent", "wind"],
+        icon: "mdi:weather-windy",
+        label: "Vent violent",
+      },
+      {
+        old: "weather_alert_storm_entity",
+        attr: ["Orages", "orage", "storm", "thunderstorm"],
+        icon: "mdi:weather-lightning",
+        label: "Orages",
+      },
+      {
+        old: "weather_alert_rain_flood_entity",
+        attr: ["Pluie-inondation", "pluie-inondation", "rain-flood", "rain"],
+        icon: "mdi:water-alert",
+        label: "Pluie-inondation",
+      },
+      {
+        old: "weather_alert_heat_entity",
+        attr: ["Canicule", "heatwave", "heat"],
+        icon: "mdi:thermometer-alert",
+        label: "Canicule",
+      },
+      {
+        old: "weather_alert_snow_ice_entity",
+        attr: ["Neige-verglas", "neige-verglas", "snow-ice", "snow"],
+        icon: "mdi:snowflake-alert",
+        label: "Neige-verglas",
+      },
+    ];
+    const order = { red: 0, orange: 1, yellow: 2 };
+    return defs
+      .map((d) => {
+        const raw = alertEntity
+          ? this._weatherAlertAttr(alertEntity, d.attr)
+          : this._value(c[d.old], "");
+        const lvl = this._vigilanceLevelFromRaw(raw);
+        return lvl ? { icon: d.icon, label: d.label, lvl } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => order[a.lvl] - order[b.lvl])
+      .map(
+        (a) =>
+          `<span class="meteo-alert ${a.lvl}" title="Vigilance ${a.label}"><ha-icon icon="${a.icon}"></ha-icon></span>`,
+      )
+      .join("");
+  }
+  _asNum(v) {
+    const n = parseFloat(
+      String(v ?? "")
+        .replace(",", ".")
+        .replace(/[^0-9+\-.]/g, ""),
+    );
+    return Number.isFinite(n) ? n : null;
+  }
+  _trendArrow(current, previous, threshold = 0.2) {
+    const c = this._asNum(current),
+      p = this._asNum(previous);
+    if (c === null || p === null) return "";
+    if (c >= p + threshold) return "↑";
+    if (c <= p - threshold) return "↓";
+    return "→";
+  }
+  _lastRawTemps() {
+    const raw =
+      this._state(this.config.raw_measurements_entity)?.attributes
+        ?.measurements || [];
+    return Array.isArray(raw)
+      ? raw
+          .map((r) => this._asNum(r?.temp ?? r?.temperature))
+          .filter((v) => v !== null)
+      : [];
+  }
+  _waterTrend() {
+    const temps = this._lastRawTemps();
+    if (temps.length >= 2) return this._trendArrow(temps[0], temps[1], 0.2);
+    const e = this.config.water_temp_entity,
+      st = this._state(e);
+    const cur = this._asNum(this._value(e, ""));
+    const prev = this._asNum(
+      st?.attributes?.previous_value ??
+        st?.attributes?.last_value ??
+        st?.attributes?.previous_temperature,
+    );
+    return this._trendArrow(cur, prev, 0.2);
+  }
+  _forecastTempFromWeather() {
+    const w = this._state(this.config.weather_entity);
+    const attrs = w?.attributes || {};
+    const keys = [
+      "forecast_temperature",
+      "temperature_forecast",
+      "next_temperature",
+      "forecast_temp",
+      "temperature_next",
+    ];
+    for (const k of keys) {
+      const n = this._asNum(attrs[k]);
+      if (n !== null) return n;
+    }
+    const f = attrs.forecast;
+    if (Array.isArray(f) && f.length) {
+      const n = this._asNum(
+        f[0]?.temperature ?? f[0]?.templow ?? f[0]?.native_temperature,
+      );
+      if (n !== null) return n;
+    }
+    return null;
+  }
+  _airTrend() {
+    const c = this.config || {};
+    const cur =
+      this._asNum(this._value(c.air_temp_entity, "")) ??
+      this._asNum(this._state(c.weather_entity)?.attributes?.temperature);
+    const next =
+      this._asNum(this._value(c.forecast_temp_entity, "")) ??
+      this._forecastTempFromWeather();
+    return this._trendArrow(next, cur, 0.2);
+  }
+  _weatherBlock(air, uv) {
+    const c = this.config || {};
+    const w = c.weather_entity ? this._state(c.weather_entity) : null;
+    const currentIcon = this._weatherIcon(w?.state || "");
+    const next = this._weatherForecastState() || w?.state || "";
+    const nextIcon = this._weatherIcon(next);
+    const alerts = this._weatherAlertBadges();
+    const trend = this._airTrend();
+    return `<div class="weather"><div class="air-block"><span>air</span><strong>${air}</strong>${trend ? `<span class="trend-arrow">${trend}</span>` : ""}</div><i></i><div class="meteo-block"><div class="meteo-icons"><ha-icon icon="${currentIcon}"></ha-icon><span class="next">›</span><ha-icon icon="${nextIcon}"></ha-icon></div><span class="uv">UV ${uv}</span>${alerts ? `<div class="meteo-alerts">${alerts}</div>` : ""}</div></div>`;
+  }
+
+  render() {
+    if (!this.shadowRoot || !this._hass) return;
+    const c = this.config || {},
+      water = `${this._fmtMainTemp(this._value(c.water_temp_entity, ""))} °C`,
+      air = this._format(c.air_temp_entity),
+      ph = this._value(c.ph_entity),
+      uv = this._value(c.uv_entity, "0"),
+      last = this._lastMeasureDisplay(),
+      banner = this._banner();
+    const devices = [
+      c.enable_filter_pump
+        ? this._smallDevice("Pompe à filtration", "mdi:pool", c.pump_entity)
+        : "",
+      c.enable_heatpump
+        ? this._smallDevice(
+            "Pompe à chaleur",
+            "mdi:heat-pump-outline",
+            c.heatpump_entity,
+          )
+        : "",
+      c.enable_electrolyzer
+        ? this._smallDevice(
+            "Électrolyseur",
+            "mdi:creation-outline",
+            c.electrolyzer_entity,
+          )
+        : "",
+      c.enable_counter_current
+        ? this._smallDevice(
+            "Nage contre-courant",
+            "mdi:waves-arrow-right",
+            c.counter_current_entity,
+          )
+        : "",
+    ].join("");
+    this.shadowRoot.innerHTML = `<style>${this.styles()}.taylor-hero{text-align:center;padding:18px}.taylor-hero ha-icon{--mdc-icon-size:72px;color:#0f1b33}.taylor-hero h3{margin:8px 0;font-size:24px}.taylor-hero p{color:#526174;font-size:14px}.taylor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 22px}.taylor-tile{background:#fff;border-radius:14px;padding:18px;text-align:center;box-shadow:0 8px 24px rgba(15,27,51,.06)}.taylor-tile strong{display:block;font-size:26px;color:#0f1b33}.taylor-tile span{display:block;margin-top:8px;font-size:13px;color:#526174}.taylor-result{background:#fff;border-radius:16px;padding:18px;box-shadow:0 8px 24px rgba(15,27,51,.06)}.taylor-result strong{display:block;font-size:20px}.taylor-result span{display:block;margin:8px 0;color:#526174}.taylor-result.good{border-left:6px solid #2bd3b7}.taylor-result.warn{border-left:6px solid #ffb84d}.taylor-result.bad{border-left:6px solid #ff6b6b}.taylor-result.neutral{border-left:6px solid #9aa7b8}.taylor-note{color:#526174;font-size:13px;line-height:1.45;margin:18px 4px 40px}.notify-settings label{display:block;margin:10px 0}.notify-settings input[type=text]{width:100%;box-sizing:border-box;border:1px solid #d9e1ec;border-radius:12px;padding:12px;margin-top:8px}.notify-settings .check{display:flex;gap:10px;align-items:center}.notify-settings .secondary{border:0;border-radius:14px;padding:12px 16px;background:#eef3f8;color:#14233b;font-weight:700;margin-top:8px}.notify-label{font-weight:700;margin:14px 0 8px}.electrolyzer.advanced{grid-template-columns:auto 1fr auto}.electro-output{grid-column:2/4;width:100%;margin-top:10px}.electro-output label{display:flex;justify-content:space-between;font-size:13px;color:#526174}.electro-output input{width:100%;accent-color:#13bfa8}.history-sheet{background:#f4f7fb}.history-scroll{overflow:auto;padding:18px 18px 80px;height:calc(100% - 64px);box-sizing:border-box}.history-periods{display:flex;gap:8px;margin-bottom:16px;position:sticky;top:0;background:#f4f7fb;padding:4px 0 10px;z-index:2}.history-periods button{border:0;border-radius:999px;padding:9px 14px;background:#e5ebf3;font-weight:800}.history-periods button.active{background:#13bfa8;color:#fff}.history-card{background:#fff;border-radius:16px;padding:15px;margin-bottom:14px;box-shadow:0 8px 24px rgba(15,27,51,.06)}.history-head{display:flex;justify-content:space-between;align-items:center}.history-head strong{display:block;font-size:17px}.history-head span{display:block;color:#718096;font-size:12px}.history-head b{font-size:21px}.history-card svg{width:100%;height:210px;margin-top:12px;overflow:visible}.history-card svg line{stroke:#d8e0ea;stroke-width:1}.history-card svg polyline{fill:none;stroke:#13bfa8;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.history-scale{display:flex;justify-content:space-between;color:#718096;font-size:11px}.history-loading,.history-error,.history-empty{padding:28px;text-align:center;background:#fff;border-radius:14px;color:#526174}.history-loading ha-icon{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.notify-list{background:#f7f9fc;border-radius:14px;padding:8px;margin:8px 0 14px}.notify-settings label{display:block;margin:10px 0}.notify-settings input[type=text],.notify-settings input[type=number]{width:100%;box-sizing:border-box;border:1px solid #d9e1ec;border-radius:12px;padding:12px;margin-top:8px}.notify-settings .check{display:flex;gap:10px;align-items:center}.notify-settings .secondary{border:0;border-radius:14px;padding:12px 16px;background:#eef3f8;color:#14233b;font-weight:700;margin-top:8px}.settings-select-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,210px);gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #e8edf5}.settings-select-row label{font-size:16px;font-weight:800}.settings-select-row select{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:14px;padding:10px;font-size:15px;color:#000;background:white}.placement-settings[hidden],[data-placement-centered][hidden],[data-placement-window][hidden]{display:none!important}.settings-time-row input{font-variant-numeric:tabular-nums}@media(max-width:430px){.settings-select-row{grid-template-columns:1fr}.settings-select-row select{font-size:16px}}</style><ha-card class="pool-card ${c.theme || "analyseur_eau"}"><div class="top"><div class="title">${c.title || "Piscine"}</div><div class="tabs"><button class="tab ${this._tab === "analysis" ? "active" : ""}" data-tab="analysis"><ha-icon icon="mdi:water-outline"></ha-icon>Analyse</button><button class="tab ${this._tab === "control" ? "active" : ""}" data-tab="control"><ha-icon icon="mdi:toggle-switch-outline"></ha-icon>Contrôle</button></div>${this._weatherBlock(air, uv)}</div>${this._tab === "analysis" ? `<div class="analysis-equipment">${devices || '<div class="empty-device">Connecter un nouvel équipement</div>'}</div><div class="water-zone"><div class="measure-card"><div class="trophy"><ha-icon icon="mdi:wifi"></ha-icon></div><div><strong>Dernière Mesure</strong><span>${last}</span></div><button class="measure-trigger ${this._measureFlash ? "ok" : ""}" data-action="measure" data-entity="${c.trigger_measure_entity || ""}"><ha-icon icon="mdi:radar"></ha-icon></button></div><div class="water-main"><span>eau</span><strong>${water}${this._waterTrend() ? ` <span class="water-trend">${this._waterTrend()}</span>` : ""}</strong>${this._poolAlertBadges()}</div><div class="gauges">${this._phGauge(ph)}${this._chlorineGauge()}</div></div>` : this._controlPanel()}${banner.cls === "bottom-snoozed" ? `<div class="bottom-snoozed"><ha-icon icon="${banner.icon}"></ha-icon><span>${banner.text}</span><button data-cancel-snooze="1">Annuler</button></div>` : banner.open ? `<button class="${banner.cls}" data-panel="${banner.panel || "alert"}"><ha-icon icon="${banner.icon}"></ha-icon>${banner.text}</button>` : `<div class="${banner.cls}"><ha-icon icon="${banner.icon}"></ha-icon><span>${banner.text}</span></div>`}<div class="bottom-nav"><button data-panel="menu"><ha-icon icon="mdi:waves"></ha-icon><span>Menu</span></button><button class="fin"><ha-icon icon="mdi:shark-fin-outline"></ha-icon></button><button data-panel="poolhouse"><ha-icon icon="mdi:bucket-outline"></ha-icon><span>Pool House</span></button></div>${this._panel === "alert" ? this._alertPanel() : ""}${this._panel === "vigilance" ? this._vigilancePanel() : ""}${this._panel === "menu" ? this._menuPanel() : ""}${this._panel === "history" ? this._historyPanel() : ""}${this._panel === "poolhouse" ? this._poolHousePanel() : ""}${this._panel === "addProduct" ? this._addProductPanel() : ""}${this._panel === "expert" ? this._expertPanel() : ""}${this._panel === "maintenance" ? this._journalPanel() : ""}${this._panel === "journal" ? this._journalPanel() : ""}${this._panel === "journalAdd" ? this._journalAddPanel() : ""}${this._panel === "journalCats" ? this._journalCategoriesPanel() : ""}${this._panel === "settings" ? this._settingsPanel() : ""}${this._panel === "taylor" ? this._taylorBalancePanel() : ""}${this._panel === "journalDetail" ? this._journalDetailPanel() : ""}${this._panel === "journalEdit" ? this._journalEditPanel() : ""}</ha-card>`;
+    this._bind();
+  }
+
+  _taylorValue(v, unit = "") {
+    if (
+      v === undefined ||
+      v === null ||
+      v === "" ||
+      String(v) === "unknown" ||
+      String(v) === "unavailable"
+    )
+      return "—";
+    const s = String(v);
+    if (unit && s.includes(unit)) return s;
+    return `${v}${unit ? ` ${unit}` : ""}`;
+  }
+  _taylorClass(status) {
+    return (
+      {
+        corrosive: "bad",
+        agressive: "warn",
+        equilibree: "good",
+        entartrante: "warn",
+        tres_entartrante: "bad",
+        incomplet: "neutral",
+      }[status] || "neutral"
+    );
+  }
+
+  _autoPoolEntity(suffixes) {
+    const p = this._poolNamePrefix ? this._poolNamePrefix() : "piscine";
+    const list = [];
+    for (const s of suffixes) {
+      list.push(`sensor.${p}_${s}`);
+      list.push(`sensor.piscine_${s}`);
+    }
+    return list.find((e) => this._state(e)) || null;
+  }
+  _autoPoolValue(suffixes, def = "—") {
+    const e = this._autoPoolEntity(suffixes);
+    return e ? this._value(e, def) : def;
+  }
+  _autoPoolState(suffixes, def = "—") {
+    const e = this._autoPoolEntity(suffixes);
+    return e ? (this._state(e)?.state ?? def) : def;
+  }
+  _cleanTaylorNumber(v) {
+    if (
+      v === undefined ||
+      v === null ||
+      v === "" ||
+      String(v) === "unknown" ||
+      String(v) === "unavailable"
+    )
+      return "—";
+    return String(v).replace(" ppm", "").replace(" °C", "");
+  }
+
+  _taylorBalancePanel() {
+    const a = this._chemistryIntel();
+    const strip = this._state(this.config.strip_test_entity)?.attributes || {};
+    const ph = strip.ph ?? this._value(this.config.ph_entity, "—");
+    const tac = strip.alkalinity ?? strip.tac ?? a.alkalinity ?? "—";
+    const th = strip.calcium ?? strip.th ?? a.calcium_hardness ?? "—";
+    const cya = strip.cya ?? a.cya ?? "—";
+    const temp =
+      strip.temperature ??
+      a.water_temp_c ??
+      this._value(this.config.water_temp_entity, "—");
+    const phs =
+      a.phs ??
+      a.saturation_ph ??
+      this._autoPoolValue(["phs", "ph_s", "saturation_ph"], "—");
+    const minf =
+      a.minf ??
+      a.tds ??
+      a.mineralization ??
+      this._autoPoolValue(
+        ["minf_tds", "minf", "tds", "mineralisation", "mineralization"],
+        "—",
+      );
+    const lsi = a.lsi ?? this._autoPoolValue(["lsi"], "—");
+    const rawStatus =
+      a.lsi_status ||
+      a.taylor_status ||
+      this._autoPoolState(
+        ["balance_de_taylor", "taylor_balance", "etat_balance_de_taylor"],
+        "—",
+      );
+    const status = this._lsiStatusLabel(rawStatus);
+    const cls = this._taylorClass(rawStatus);
+    const comment =
+      a.taylor_comment ||
+      this._state(
+        this._autoPoolEntity([
+          "balance_de_taylor",
+          "taylor_balance",
+          "etat_balance_de_taylor",
+        ]) || "",
+      )?.attributes?.comment ||
+      "Calcul effectué par Pool Pilot. Les valeurs affichées ici proviennent de l’intégration.";
+    const card = (label, val, unit = "") =>
+      `<div class="taylor-tile"><strong>${this._taylorValue(val, unit)}</strong><span>${label}</span></div>`;
+    return `<div class="full-sheet expert-sheet taylor-sheet"><div class="sheet-top"><button data-panel="menu"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>Balance de Taylor</h2><button data-panel=""><ha-icon icon="mdi:close"></ha-icon></button></div><div class="expert-scroll"><div class="taylor-hero"><ha-icon icon="mdi:scale-balance"></ha-icon><h3>Bilan hydrique</h3><p>Analyse de l’équilibre calco-carbonique calculée par Pool Pilot côté intégration.</p></div><div class="taylor-grid">${card("TAC", tac, "ppm")}${card("TH", th, "ppm")}${card("CYA / STAB", cya, "ppm")}${card("Temp", temp, "°C")}${card("pH", ph)}${card("pHs", phs)}${card("MINF / TDS", minf)}${card("LSI", lsi)}</div><div class="section-title">Interprétation</div><div class="taylor-result ${cls}"><strong>${status}</strong><span>LSI : ${this._taylorValue(lsi)}</span><p>${comment}</p></div><div class="section-title">Repères</div><div class="diag smart-diag"><div>LSI négatif<span>eau agressive / corrosive</span></div><div>LSI proche de 0<span>équilibre idéal</span></div><div>LSI positif<span>eau entartrante</span></div></div><p class="taylor-note">Les calculs pHs, LSI et MINF/TDS sont effectués par Pool Pilot. La carte affiche uniquement les résultats.</p></div></div>`;
+  }
+
+  _flashMeasureButton() {
+    this._measureFlash = true;
+    const btn = this.shadowRoot?.querySelector(".measure-trigger");
+    if (btn) btn.classList.add("ok");
+    clearTimeout(this._measureFlashTimer);
+    this._measureFlashTimer = setTimeout(() => {
+      this._measureFlash = false;
+      const b = this.shadowRoot?.querySelector(".measure-trigger");
+      if (b) b.classList.remove("ok");
+      this.render();
+    }, 2000);
+  }
+  _bind() {
+    this.shadowRoot
+      .querySelector("[data-filtration-placement]")
+      ?.addEventListener("change", (event) => {
+        event.stopPropagation();
+        this._syncFiltrationPlacementFields();
+      });
+    this.shadowRoot.querySelectorAll("[data-save-settings]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          this._saveSettings();
+        }),
+    );
+    this.shadowRoot
+      .querySelector("[data-test-notification]")
+      ?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const b = e.currentTarget;
+        this._hass
+          .callService("pool_pilot", "send_test_notification", {})
+          .then(() => {
+            b.textContent = "Test envoyé";
+          })
+          .catch((err) => {
+            console.warn("Pool Pilot test notification failed", err);
+            b.textContent = "Erreur test";
+          })
+          .finally(() =>
+            setTimeout(
+              () => (b.textContent = "Envoyer une notification de test"),
+              2000,
+            ),
+          );
+      });
+    this._restorePanelScroll();
+    this._bindExpertScroll();
+    this._bindStripConversion();
+    this.shadowRoot.querySelectorAll("[data-history-period]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          this._historyData = null;
+          this._loadHistory(b.dataset.historyPeriod);
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-history-refresh]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          this._historyData = null;
+          this._loadHistory(this._historyPeriod);
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-electro-output]").forEach(
+      (inp) =>
+        (inp.onchange = (e) => {
+          e.stopPropagation();
+          const entity = inp.dataset.electroOutput,
+            value = Number(inp.value);
+          if (!entity || !Number.isFinite(value)) return;
+          this._setOpt(entity, { state: value }, 15000);
+          this._hass
+            .callService("number", "set_value", { entity_id: entity, value })
+            .finally(() => setTimeout(() => this._safeRender(), 700));
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-tab]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          this._tab = b.dataset.tab;
+          this.render();
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-panel]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          this._editingProduct = null;
+          const nextPanel = b.dataset.panel || null;
+          if (nextPanel === "expert" && this._panel !== "expert") {
+            this._panelScroll = 0;
+            try {
+              sessionStorage.removeItem(this._key("expert_scroll"));
+            } catch (e) {}
+          }
+          this._panel = nextPanel;
+          this.render();
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-close]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          if (e.target === b || b.tagName === "BUTTON") {
+            this._panel = null;
+            this.render();
+          }
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-cancel-snooze]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          this._clearSnooze();
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-config-number]").forEach(
+      (inp) =>
+        (inp.onchange = (e) => {
+          e.stopPropagation();
+          const key = inp.dataset.configNumber;
+          const val = parseFloat(String(inp.value).replace(",", "."));
+          if (!Number.isFinite(val)) return;
+          this.config = { ...(this.config || {}), [key]: val };
+          this.dispatchEvent(
+            new CustomEvent("config-changed", {
+              detail: { config: this.config },
+              bubbles: true,
+              composed: true,
+            }),
+          );
+          this.render();
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-journal-open]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          this._selectedJournalId = b.dataset.journalOpen;
+          this._panel = "journalDetail";
+          this.render();
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-edit-journal]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          this._selectedJournalId = b.dataset.editJournal;
+          const entry = this._journalById(this._selectedJournalId);
+          this._pendingJournalCat = entry?.category || "note";
+          this._panel = "journalEdit";
+          this.render();
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-delete-journal]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          const id = b.dataset.deleteJournal;
+          if (!id) return;
+          this._hass
+            .callService("pool_pilot", "remove_journal_entry", { entry_id: id })
+            .then(() => {
+              this._panel = "journal";
+              setTimeout(() => this.render(), 500);
+            })
+            .catch(() => {
+              this._panel = "journal";
+              this.render();
+            });
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-update-journal]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          const id = b.dataset.updateJournal;
+          if (!id) return;
+          const title =
+            this.shadowRoot.querySelector('[name="journal_title"]')?.value ||
+            "";
+          const description =
+            this.shadowRoot.querySelector('[name="journal_comment"]')?.value ||
+            "";
+          const category =
+            this._pendingJournalCat ||
+            this._journalById(id)?.category ||
+            "note";
+          this._hass
+            .callService("pool_pilot", "update_journal_entry", {
+              entry_id: id,
+              category,
+              title,
+              description,
+            })
+            .then(() => {
+              this._panel = "journal";
+              setTimeout(() => this.render(), 500);
+            })
+            .catch(() => {
+              this._panel = "journal";
+              this.render();
+            });
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-journal-cat]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          this._pendingJournalCat = b.dataset.journalCat;
+          this._panel = this._selectedJournalId ? "journalEdit" : "journalAdd";
+          this.render();
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-save-journal]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          const comment =
+            this.shadowRoot.querySelector('[name="journal_comment"]')?.value ||
+            "";
+          const category = this._pendingJournalCat || "note";
+          this._hass
+            .callService("pool_pilot", "add_journal_entry", {
+              category,
+              title: this._journalCategoryLabel(category),
+              description: comment,
+            })
+            .then(() => {
+              this._panel = "journal";
+              setTimeout(() => this.render(), 500);
+            })
+            .catch(() => {
+              this._panel = "journal";
+              this.render();
+            });
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-action]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          const action = b.dataset.action || "toggle";
+          if (action === "measure") {
+            this._flashMeasureButton();
+            if (ent) this._call(ent, "press");
+            return;
+          }
+          if (action === "auto_schedule") {
+            const active = this._autoActive();
+            const next = !active;
+            localStorage.setItem(this._key("auto_active"), next ? "on" : "off");
+            b.classList.toggle("on", next);
+            const ent = b.dataset.entity || "";
+            let p;
+            if (!ent) {
+              p = this._hass.callService(
+                "pool_pilot",
+                active ? "stop_auto_filtration" : "start_auto_filtration",
+                {},
+              );
+            } else {
+              const d = this._domain(ent);
+              if (["switch", "input_boolean"].includes(d))
+                p = this._call(ent, next ? "on" : "off");
+              else if (d === "button" || d === "input_button")
+                p = this._hass
+                  .callService(
+                    "pool_pilot",
+                    active ? "stop_auto_filtration" : "start_auto_filtration",
+                    {},
+                  )
+                  .catch(() => this._call(ent, "press"));
+              else p = this._call(ent, "toggle");
+            }
+            this.render();
+            Promise.resolve(p)
+              .then(() => {
+                setTimeout(() => {
+                  const ids = [
+                    this._smartFiltrationEntity(),
+                    this.config.action_summary_entity,
+                    this.config.actions_entity,
+                    this.config.filtration_duration_entity,
+                  ].filter(Boolean);
+                  if (ids.length)
+                    this._hass
+                      .callService("homeassistant", "update_entity", {
+                        entity_id: ids,
+                      })
+                      .catch(() => {});
+                  this.render();
+                }, 700);
+              })
+              .catch((err) => {
+                console.error(err);
+                localStorage.setItem(
+                  this._key("auto_active"),
+                  active ? "on" : "off",
+                );
+                this.render();
+              });
+            return;
+          }
+          const ent = b.dataset.entity;
+          if (ent && ent === this.config.heatpump_entity) {
+            const n = !this._isOn(ent);
+            this._setOpt(ent, { state: n ? "auto" : "off" }, 20000);
+            this.render();
+            Promise.resolve(this._call(ent, n ? "on" : "off")).finally(() =>
+              setTimeout(() => this._safeRender(), 1500),
+            );
+            return;
+          }
+          Promise.resolve(this._call(ent, action)).finally(() =>
+            setTimeout(() => this._safeRender(), 500),
+          );
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-hvac]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const e = this.config.heatpump_entity,
+            m = b.dataset.hvac;
+          this._setOpt(e, { state: m }, 12000);
+          this.render();
+          Promise.resolve(this._call(e, m)).finally(() =>
+            setTimeout(() => this._safeRender(), 1000),
+          );
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-temp]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const e = this.config.heatpump_entity;
+          const rawTemp =
+            this._optState(e)?.temperature ??
+            this._state(e)?.attributes?.temperature ??
+            this._value(this.config.heatpump_temp_entity, "0");
+          const cur = parseFloat(rawTemp);
+          if (Number.isFinite(cur)) {
+            const t = Math.round((cur + parseFloat(b.dataset.temp)) * 10) / 10;
+            this._setOpt(e, { temperature: t }, 12000);
+            this.render();
+            Promise.resolve(this._call(e, "set_temperature", t)).finally(() =>
+              setTimeout(() => this._safeRender(), 1000),
+            );
+          }
+        }),
+    );
+    this.shadowRoot
+      .querySelectorAll("[data-snooze]")
+      .forEach(
+        (b) =>
+          (b.onclick = () =>
+            this._setSuppress("snooze", Number(b.dataset.snooze || 6))),
+      );
+    this.shadowRoot
+      .querySelectorAll("[data-done]")
+      .forEach(
+        (b) =>
+          (b.onclick = () =>
+            this._setSuppress("done", Number(b.dataset.done || 24))),
+      );
+    this.shadowRoot.querySelectorAll("[data-product-delete]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          const id = b.dataset.productDelete;
+          if (id && confirm("Supprimer ce produit du Pool House ?"))
+            this._hass
+              .callService("pool_pilot", "remove_product", { product_id: id })
+              .then(() => {
+                this._panel = "poolhouse";
+                this.render();
+              })
+              .catch((err) =>
+                console.error("Pool Pilot remove_product failed", err),
+              );
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-product-edit]").forEach(
+      (b) =>
+        (b.onclick = (e) => {
+          e.stopPropagation();
+          const id = b.dataset.productEdit;
+          this._editingProduct =
+            this._products().find(
+              (p) => (p.attributes.product_id || p.entity_id) === id,
+            ) || null;
+          this._panel = "addProduct";
+          this.render();
+        }),
+    );
+    this.shadowRoot.querySelectorAll("[data-save-strip]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const root = this.shadowRoot,
+            num = (n) => {
+              const v = parseFloat(
+                String(
+                  root.querySelector(`[name="${n}"]`)?.value || "",
+                ).replace(",", "."),
+              );
+              return Number.isFinite(v) ? v : null;
+            };
+          const payload = {
+            ph: num("strip_ph"),
+            alkalinity: num("strip_alkalinity"),
+            calcium: num("strip_calcium"),
+            cya: num("strip_cya"),
+            free_chlorine: num("strip_free_chlorine"),
+            total_chlorine: num("strip_total_chlorine"),
+            temperature: num("strip_temperature"),
+          };
+          Object.keys(payload).forEach(
+            (k) => payload[k] === null && delete payload[k],
+          );
+          this._setLocalStrip(payload);
+          this.render();
+          this._hass
+            .callService("pool_pilot", "update_strip_test", payload)
+            .then(() => {
+              this._refreshStripEntities();
+              setTimeout(() => {
+                this._refreshStripEntities();
+                this._panel = "expert";
+                this.render();
+              }, 800);
+            })
+            .catch((err) => {
+              console.error("Pool Pilot update_strip_test failed", err);
+              alert("Erreur Pool Pilot: " + (err?.message || err));
+            });
+        }),
+    );
+    const add = this.shadowRoot.querySelector("[data-add-product]");
+    if (add)
+      add.onclick = () => {
+        const root = this.shadowRoot,
+          gv = (n) => root.querySelector(`[name="${n}"]`)?.value || "",
+          num = (n) => {
+            const v = parseFloat(String(gv(n)).replace(",", "."));
+            return Number.isFinite(v) ? v : null;
+          };
+        const category = gv("product_type") || gv("category") || "other";
+        const dose = num("normal_dose_amount") || 0,
+          du = gv("dose_unit") || gv("unit") || "g",
+          vol = num("reference_volume_m3") || 10,
+          delta = num("ph_delta");
+        const payload = {
+          id:
+            gv("id") ||
+            (gv("name") || "produit")
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^_|_$/g, "") ||
+            undefined,
+          name: gv("name") || "Produit",
+          category: category || "other",
+          dosage_quantity: dose,
+          dosage_unit: du,
+          volume_basis_m3: vol,
+          effect_delta: delta,
+          stock_quantity: num("stock") || 0,
+          stock_unit: gv("unit") || du,
+          notes: JSON.stringify({
+            brand: gv("brand"),
+            form: gv("form"),
+            unit_weight_g: num("unit_weight_g"),
+            multifunction: gv("multifunction") === "true",
+            dissolution: gv("dissolution"),
+            stabilized: gv("stabilized") === "true",
+            treatment_place: gv("treatment_place"),
+            shock_dose_amount: num("shock_dose_amount"),
+            initial_dose_amount: num("initial_dose_amount"),
+          }),
+        };
+        const service = this._editingProduct ? "update_product" : "add_product";
+        this._hass
+          .callService("pool_pilot", service, payload)
+          .then(() => {
+            this._editingProduct = null;
+            this._panel = "poolhouse";
+            this.render();
+          })
+          .catch((err) => {
+            console.error("Pool Pilot " + service + " failed", err);
+            alert("Erreur Pool Pilot: " + (err?.message || err));
+          });
+      };
+  }
+  _restorePanelScroll() {
+    const p =
+      this.shadowRoot?.querySelector(".expert-scroll") ||
+      this.shadowRoot?.querySelector(".full-sheet");
+    if (p && this._panelScroll && this._panel) p.scrollTop = this._panelScroll;
+  }
+  _bindExpertScroll() {
+    const p =
+      this.shadowRoot?.querySelector(".expert-scroll") ||
+      this.shadowRoot?.querySelector(".full-sheet");
+    if (!p) return;
+    const save = () => {
+      this._panelScroll = p.scrollTop;
+      try {
+        sessionStorage.setItem(
+          this._key("expert_scroll"),
+          String(this._panelScroll || 0),
+        );
+      } catch (e) {}
+    };
+    try {
+      const saved = Number(
+        sessionStorage.getItem(this._key("expert_scroll")) || 0,
+      );
+      if (saved && this._panel === "expert") p.scrollTop = saved;
+    } catch (e) {}
+    p.addEventListener("scroll", save, { passive: true });
+    p.addEventListener("touchmove", (e) => e.stopPropagation(), {
+      passive: true,
+    });
+    p.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
+    p.querySelectorAll("input,select,textarea").forEach((el) => {
+      el.addEventListener("focus", save, { passive: true });
+      el.addEventListener("input", save, { passive: true });
+      el.addEventListener("change", save, { passive: true });
+    });
+  }
+  _bindStripConversion() {
+    const root = this.shadowRoot;
+    if (!root) return;
+    const ppmToF = (ppm) => {
+      const n = parseFloat(String(ppm || "").replace(",", "."));
+      return Number.isFinite(n) ? Math.round((n / 10) * 10) / 10 : "";
+    };
+    const fToPpm = (f) => {
+      const n = parseFloat(String(f || "").replace(",", "."));
+      return Number.isFinite(n) ? Math.round(n * 10 * 10) / 10 : "";
+    };
+    [
+      ["strip_alkalinity", "strip_alkalinity_f"],
+      ["strip_calcium", "strip_calcium_f"],
+    ].forEach(([ppmName, fName]) => {
+      const ppm = root.querySelector(`[name="${ppmName}"]`),
+        ff = root.querySelector(`[name="${fName}"]`);
+      if (!ppm || !ff) return;
+      ppm.oninput = () => {
+        ff.value = ppmToF(ppm.value);
+      };
+      ff.oninput = () => {
+        ppm.value = fToPpm(ff.value);
+      };
+    });
+  }
+  styles() {
+    return `ha-card.pool-card{position:relative;overflow:hidden;border-radius:0;background:#eef7fb;color:#14233b;font-family:var(--primary-font-family);box-shadow:none}.top{padding:18px 18px 8px}.title{text-align:center;font-weight:600;font-size:18px;margin-bottom:14px}.tabs{display:grid;grid-template-columns:1fr 1fr;background:#aeb8c7;border-radius:18px;overflow:hidden}.tab{border:0;padding:13px 8px;font-size:16px;color:white;background:transparent;display:flex;align-items:center;justify-content:center;gap:8px}.tab.active{background:#10182d}.weather{display:flex;align-items:center;gap:10px;margin:18px 4px 10px}.air-block{display:flex;align-items:center;gap:10px}.air-block span:first-child{font-size:24px;opacity:.9}.air-block strong{font-size:42px;line-height:1}.weather i{height:58px;width:1px;background:#9aaabd;margin-left:auto}.meteo-block{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:92px}.meteo-icons{display:flex;align-items:center;justify-content:center;gap:7px;color:#14233b}.meteo-icons ha-icon{--mdc-icon-size:22px}.meteo-icons .next{font-size:26px;line-height:18px}.uv{border:2px solid #14233b;border-radius:10px;padding:2px 8px;font-weight:600}.meteo-alerts{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;max-width:92px}.meteo-alert{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white}.meteo-alert ha-icon{--mdc-icon-size:14px}.meteo-alert.yellow{background:#f4d82f}.meteo-alert.orange{background:#f4a325}.meteo-alert.red{background:#cc2f2f}.analysis-equipment{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 18px 70px}.device-mini{display:grid;grid-template-columns:42px 1fr auto;align-items:center;gap:8px;background:white;border-radius:16px;padding:14px;min-height:55px}.device-mini ha-icon{--mdc-icon-size:36px;color:#111}.device-mini span{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mini-power{border:0;width:46px;height:46px;border-radius:50%;background:#e9eef7;color:#95a2b4;display:flex;align-items:center;justify-content:center}.mini-power.on{background:#16d26b;color:white}.empty-device{grid-column:1/-1;background:#10182d;color:white;font-weight:800;border-radius:16px;padding:20px;font-size:18px}.water-zone{position:relative;background:linear-gradient(160deg,#2ed5c7,#4a9bd8);color:white;padding-top:60px;min-height:460px;border-radius:55% 45% 0 0 / 10% 8% 0 0}.water-zone:before{content:'';position:absolute;left:-15%;right:-15%;top:-55px;height:120px;background:#2ed5c7;border-radius:50%;box-shadow:0 6px 0 rgba(94,88,184,.75);opacity:.96}.measure-card{position:relative;z-index:2;margin:-18px 18px 0;background:rgba(225,255,252,.86);border-radius:14px;padding:10px;display:grid;grid-template-columns:52px 1fr 46px;gap:10px;align-items:center;color:#14233b}.trophy{width:52px;height:52px;border-radius:8px;background:#ff4db4;color:white;display:flex;align-items:center;justify-content:center}.measure-card strong,.measure-card span{display:block}.measure-trigger.ok,.measure-card button.ok{background:#2bd3b7!important;color:#fff!important;transform:scale(.96);box-shadow:0 0 0 8px rgba(43,211,183,.25)!important}.measure-card button{border:0;background:#10182d;color:white;border-radius:12px;width:44px;height:44px}.water-main{text-align:center;margin-top:48px}.water-main span{display:block;font-size:28px;opacity:.85}.water-main strong{font-size:48px;line-height:1}.gauges{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:26px 18px 26px;color:white}.gauge{display:flex;flex-direction:column;align-items:center;gap:8px}.ph-svg,.speed-svg{width:135px;height:135px;overflow:visible}.ph-track{fill:none;stroke:rgba(255,255,255,.22);stroke-width:14;stroke-linecap:round}.ph-progress{fill:none;stroke:#11182d;stroke-width:14;stroke-linecap:round}.ph-dot{fill:white}.ph-svg text{fill:white;font-size:38px;font-weight:400}.speed-track{fill:none;stroke:rgba(255,255,255,.26);stroke-width:13;stroke-linecap:round}.ticks line{stroke:white;stroke-width:2;stroke-linecap:round}.speed-needle{stroke:#11182d;stroke-width:9;stroke-linecap:round}.hub{fill:#11182d}.gauge{display:grid;grid-template-rows:140px 26px 30px 48px;align-items:center;justify-items:center}.gauge svg{grid-row:1;width:140px;height:140px}.gauge-value{grid-row:2;text-align:center;font-size:18px;font-weight:900;line-height:26px;margin:0;min-height:26px}.gauge-value-placeholder{visibility:hidden}.gauge-label{grid-row:3;font-size:20px;line-height:30px;margin:0}.gauge .pill{grid-row:4;align-self:start}.pill{border-radius:999px;padding:8px 14px;min-width:118px;text-align:center;font-size:16px;background:white;color:#14233b;display:flex;justify-content:center;align-items:center;gap:6px}.pill.good{border:2px solid rgba(255,255,255,.9);background:rgba(255,255,255,.12);color:white}.pill.warn{background:white;color:#14233b}.pill.bad{background:#ff8b4d;color:white}.status-bang{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:2px solid currentColor;border-radius:50%;font-weight:900;line-height:1}.status-bang ha-icon{--mdc-icon-size:15px}.status-good{border-color:currentColor}.bottom-watch{width:100%;border:0;background:#ffd46a;color:#07101f;font-weight:800;font-size:18px;padding:16px;display:flex;align-items:center;justify-content:center;gap:10px}.bottom-watch ha-icon{--mdc-icon-size:26px}.bottom-alert{width:100%;border:0;display:flex;align-items:center;justify-content:center;gap:10px;background:#ff8b4d;color:white;padding:15px 12px;font-weight:800;font-size:17px}.bottom-correction{width:100%;border:0;display:flex;align-items:center;justify-content:center;gap:10px;background:#35c8c7;color:white;padding:15px 12px;font-weight:800;font-size:17px}.bottom-correction ha-icon{--mdc-icon-size:24px}.bottom-snoozed{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#12182a;color:white;padding:13px 12px;font-weight:800;font-size:15px;box-sizing:border-box}.bottom-snoozed button{border:0;background:transparent;color:white;text-decoration:underline;font-weight:800;margin-left:auto}.bottom-snoozed ha-icon{--mdc-icon-size:24px}.bottom-ok{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:white;color:#11182d;padding:13px 12px;font-weight:800;font-size:17px;box-sizing:border-box}.bottom-ok ha-icon{--mdc-icon-size:28px}.bottom-nav{display:grid;grid-template-columns:1fr 1fr 1fr;background:#302744;color:white;padding:14px 10px 20px;align-items:center}.bottom-nav button{background:transparent;border:0;color:white;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px}.bottom-nav ha-icon{--mdc-icon-size:34px}.bottom-nav .fin{width:58px;height:58px;border:2px solid white;border-radius:50%;margin:auto;justify-content:center}.control-panel{padding:8px 18px 24px;background:white;min-height:520px}.control-device{display:grid;grid-template-columns:54px 1fr auto;align-items:center;gap:12px;background:#f6f8fb;border-radius:16px;padding:18px 14px;margin-bottom:14px}.control-device>ha-icon{--mdc-icon-size:45px;color:#111}.control-device span{display:block;font-size:13px;color:#536176;margin-top:4px}.control-buttons{display:flex;gap:8px;align-items:center}.round{width:46px;height:46px;border-radius:50%;border:0;background:#edf1f7;color:#98a5b8;display:flex;align-items:center;justify-content:center;position:relative}.round.on{background:#16d26b;color:white}.round.auto .bolt{font-size:25px;font-weight:900}.round.auto small{position:absolute;right:10px;top:8px;font-weight:900}.wide{border:0;border-radius:999px;background:#10182d;color:white;padding:10px 12px;font-weight:800}.heat-controls{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.mode{border:0;border-radius:12px;background:#edf1f7;color:#536176;padding:10px 8px;font-weight:700}.mode.active{background:#10182d;color:white}.temp{grid-column:1/-1;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px;background:#f3f6fa;border-radius:14px;padding:6px}.temp button{border:0;border-radius:10px;background:white;color:#10182d;font-size:22px}.temp strong{text-align:center;font-size:22px}.modal-backdrop,.menu-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.25);z-index:20;display:flex;align-items:flex-end}.alert-sheet,.menu-sheet{position:relative;background:white;color:#14233b;border-radius:24px 24px 0 0;padding:24px 18px;max-height:92%;overflow:auto;width:100%}.alert-sheet h1{font-size:34px;margin:0 0 18px}.close{position:absolute;right:18px;top:18px;border:0;background:#eef1f6;border-radius:50%;width:42px;height:42px}.alert-head{background:#203b50;color:white;border-radius:8px;padding:18px;text-align:center;display:flex;flex-direction:column;gap:8px}.alert-head ha-icon{color:#ff3f65;margin:auto;--mdc-icon-size:52px}.steps{margin:22px 0;display:grid;gap:16px}.steps div{display:grid;grid-template-columns:46px 1fr;gap:14px;align-items:center}.steps b{background:#203b50;color:white;padding:15px 0;text-align:center}.steps span{background:white;border-radius:10px;padding:15px;box-shadow:0 3px 14px rgba(22,42,70,.18)}.alert-actions{display:grid;grid-template-columns:1fr 1fr;gap:18px}.alert-actions button{border:0;border-radius:999px;padding:14px;font-weight:800;background:#dddaf3;color:#203b50}.alert-actions .done{background:#32d8b9;color:white}.logo{text-align:center;font-size:30px;margin:8px 0 22px}.menu-sheet button:not(.close){width:100%;border:0;background:white;border-bottom:1px solid #d6dde8;padding:18px 0;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:center;text-align:left;font-size:20px;font-weight:800;color:#11182d}.menu-sheet ha-icon{--mdc-icon-size:36px;color:#111}.full-sheet{position:fixed;top:0;right:0;bottom:0;left:0;z-index:999;background:#f2f5f8;color:#14233b;overflow-y:auto;overflow-x:hidden;padding:18px;box-sizing:border-box;max-width:520px;margin:0 auto;-webkit-overflow-scrolling:touch;overscroll-behavior:none;touch-action:pan-y;contain:content}.expert-sheet{height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;overflow:hidden;padding:18px 0 0;display:flex;flex-direction:column;scrollbar-gutter:stable;transform:translate3d(0,0,0)}.expert-sheet .sheet-top{padding:0 18px;flex:0 0 auto}.expert-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 18px 26px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;transform:translate3d(0,0,0);will-change:scroll-position}.expert-sheet input{color:#000!important;-webkit-text-fill-color:#000!important}.expert-sheet input::placeholder{color:#999!important;-webkit-text-fill-color:#999!important}.sheet-top{display:grid;grid-template-columns:46px 1fr 46px;align-items:center;margin-bottom:20px}.sheet-top button{border:0;background:transparent;color:#11182d}.sheet-top h2{text-align:center;margin:0}.seg{display:grid;grid-template-columns:1fr 1fr;background:#d2d4d9;border-radius:8px;margin:0 35px 18px;overflow:hidden}.seg button{border:0;background:transparent;color:white;padding:10px;font-weight:800;font-size:18px}.seg .active{background:#64666a}.product-card{position:relative;background:white;border-radius:10px;padding:18px;margin-bottom:18px;box-shadow:0 4px 18px rgba(22,42,70,.18)}.product-card .tag{display:inline-block;background:#203b50;color:white;border-radius:999px;padding:4px 10px;margin-bottom:10px}.product-card strong,.product-card em{display:block;font-size:18px}.product-card em{font-style:normal;color:#536176;margin-top:4px}.stock{height:9px;background:#d9e1ef;border-radius:999px;margin:18px 44px 4px 0;overflow:hidden}.stock i{display:block;height:100%;background:#31d1b7;border-radius:999px}.stock-label{font-size:12px;color:#536176}.delete,.edit{position:absolute;right:14px;border:0;background:transparent;color:#1ca2ca}.delete{top:14px;background:#2a9dc2;color:white;border-radius:50%;width:28px;height:28px}.edit{bottom:14px}.add-product label{display:block;font-weight:700;margin:12px 0}.add-product input,.add-product select{width:100%;box-sizing:border-box;border:0;border-radius:18px;padding:14px;margin-top:6px;background:white;color:#14233b;border:1px solid #d9e1ef}.section-title{text-transform:uppercase;color:#a8b2c4;font-weight:700;font-size:13px;letter-spacing:.04em;margin:22px 0 8px}.help{color:#536176;font-size:13px;line-height:1.35}.switch-grid{display:grid;grid-template-columns:1fr 130px;gap:10px;align-items:center;background:#f7f8fa;margin:18px -18px;padding:14px 18px}.switch-grid select{margin:0;border-radius:12px}.empty{padding:24px;text-align:center;color:#536176}.raw-box{background:white;border-radius:12px;padding:10px;overflow:auto}.raw-box table{width:100%;border-collapse:separate;border-spacing:0 8px;font-family:monospace}.raw-box th{background:#aaa;padding:8px;text-align:left}.raw-box td{background:#fff;padding:8px;border-bottom:1px solid #e2e7ef}.strip-card{background:white;border-radius:16px;padding:14px;margin-bottom:18px}.strip-tabs{display:grid;grid-template-columns:1fr 1fr;background:#999;border-radius:8px;overflow:hidden;margin-bottom:14px}.strip-tabs.single{grid-template-columns:1fr}.strip-tabs button{border:0;background:transparent;color:white;font-weight:800;font-size:18px;padding:8px}.strip-tabs .active{background:#000}.analyseur_eau-strip{display:grid;gap:0}.strip-row{display:grid;grid-template-columns:44px minmax(100px,1.1fr) minmax(76px,.8fr) auto minmax(76px,.8fr) auto;gap:10px;align-items:center;border-bottom:1px solid #ddd;padding:9px 0}.strip-row ha-icon{--mdc-icon-size:34px;color:#111}.strip-row b{font-size:18px;color:#000}.strip-row input{width:100%;box-sizing:border-box;border:2px solid #111;background:#fff;color:#000;text-align:center;font-size:22px;padding:10px}.strip-row input.disabled{background:#e5e5e5;color:#000}.strip-row span{font-size:18px;font-weight:800;color:#000}.strip-form label{display:block;font-weight:700;margin:12px 0}.strip-form input{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:18px;padding:14px;margin-top:6px;background:white;color:#000;-webkit-text-fill-color:#000}.save-strip{width:100%;border:0;border-radius:16px;background:#07101f;color:white;font-weight:800;padding:16px;margin-top:12px}.strip-ranges-card{background:white;border-radius:16px;padding:14px;margin:0 0 18px;box-shadow:0 4px 18px rgba(22,42,70,.06)}.strip-last-date{font-size:13px;color:#536176;margin:0 0 10px}.strip-range-help{font-size:12px;color:#536176;margin-top:14px}.strip-range-row{margin:13px 0 16px}.strip-range-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}.strip-range-head strong{font-size:17px;color:#14233b}.strip-range-head span{font-size:14px;font-weight:800;color:#14233b;text-align:right}.strip-range-bar{position:relative;height:38px;border-radius:7px;background:var(--strip-bg);overflow:visible}.strip-range-bar .strip-ok{position:absolute;top:0;bottom:0;background:#49c6e6;opacity:.95}.strip-marker{position:absolute;top:-7px;transform:translateX(-50%);height:52px;min-width:52px;display:flex;align-items:center;justify-content:center;pointer-events:none}.strip-marker i{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#111;transform:translateX(-50%);z-index:1}.strip-marker b{position:relative;z-index:2;background:white;color:#000;border:2px solid #111;border-radius:999px;min-width:42px;height:42px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.18)}.strip-range-row.hardness{--strip-bg:#ff2510}.strip-range-row.alkalinity{--strip-bg:#ffb31a}.strip-range-row.stabilizer{--strip-bg:#f5f900}.strip-range-row.total-chlorine{--strip-bg:#68dc70}.strip-range-row.free-chlorine{--strip-bg:#7d82ef}.strip-range-row.ph{--strip-bg:#e889e8}.diag{background:white;border-radius:12px;padding:10px}.diag div{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #e2e7ef}.diag div:last-child{border-bottom:0}.diag span{font-weight:700}.air-block .trend-arrow{font-size:.42em;margin-left:8px;vertical-align:middle}.water-trend{font-size:.45em;vertical-align:middle;margin-left:8px;font-weight:700}
+.journal-sheet{background:#213d50;color:white;padding:0;max-width:520px}.journal-header{height:82px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:#213d50;position:sticky;top:0;z-index:2}.journal-header h2{font-size:32px;margin:0;font-weight:900}.journal-header button{background:none;border:0;color:white}.journal-header ha-icon{--mdc-icon-size:34px}.journal-scroll{position:relative;min-height:calc(100vh - 82px);padding:20px 18px 60px;overflow:auto}.journal-line{position:absolute;top:0;bottom:0;left:50%;width:3px;background:#c8d3dc;transform:translateX(-50%)}.journal-item{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:18px 0 36px;align-items:center}.journal-item.left .journal-card{grid-column:1}.journal-item.left .journal-date{grid-column:2;text-align:left}.journal-item.right .journal-date{grid-column:1;text-align:right}.journal-item.right .journal-card{grid-column:2}.journal-card{background:white;color:#000;border-radius:8px;min-height:62px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:900;overflow:hidden}.journal-card .journal-icon{align-self:stretch;width:54px;display:flex;align-items:center;justify-content:center;color:white;order:2}.journal-item.right .journal-card .journal-icon{order:0}.journal-card strong{flex:1;text-align:center;padding:8px}.journal-date{color:#b8c3cc;font-size:17px;line-height:1.2}.journal-dot{position:absolute;left:50%;top:50%;width:10px;height:10px;background:white;border-radius:50%;transform:translate(-50%,-50%);z-index:1}.journal-empty{color:#b8c3cc;text-align:center;margin-top:80px}.journal-form-sheet{background:white;color:#213d50;padding:28px 22px}.journal-form-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:34px}.journal-form-top button{background:none;border:0;color:#14233b;font-size:18px}.journal-form-top span{font-size:20px}.journal-form-sheet h2{font-size:40px;margin:0 0 30px;font-weight:900;color:#213d50}.journal-select-cat{width:100%;border:1px solid #d9e1ef;border-radius:24px;background:#f8fafc;padding:16px 18px;text-align:left;font-size:18px;font-weight:800;color:#213d50}.journal-form-sheet label{display:block;text-transform:uppercase;color:#aeb8c9;margin:54px 0 14px;font-weight:700}.journal-form-sheet textarea{width:100%;height:110px;border:1px solid #d9e1ef;border-radius:22px;background:#f8fafc;box-sizing:border-box;font-size:18px;padding:12px;color:#000}.journal-date-pill{margin-top:70px;border-radius:20px;background:white;box-shadow:0 6px 20px rgba(35,61,80,.18);padding:14px 18px;display:flex;justify-content:space-between;align-items:center}.journal-date-pill span{font-size:18px;color:#213d50}.journal-date-pill strong{font-size:18px}.journal-cats button{display:block;width:100%;border:0;border-bottom:1px solid #e5e7eb;background:white;text-align:left;font-size:22px;padding:16px 0;color:#000}.journal-item{border:0;background:transparent;color:inherit;width:100%;font-family:inherit;cursor:pointer}.journal-detail-backdrop{align-items:flex-end}.journal-detail-sheet{width:100%;max-width:520px;background:white;color:#111;border-radius:0;overflow:hidden}.journal-detail-top{min-height:240px;background:rgba(33,61,80,.92);display:flex;align-items:flex-end;padding:0 20px 28px;color:#cfd8df;font-size:18px}.journal-detail-head{background:var(--journal-detail-color,#64748b);color:white;display:flex;align-items:center;gap:20px;padding:22px 24px;font-size:30px;font-weight:900}.journal-detail-head ha-icon{--mdc-icon-size:38px}.journal-detail-body{padding:28px 22px 40px;font-size:22px;line-height:1.35}.journal-detail-body hr{border:0;border-top:1px solid #e5e7eb;margin:30px 0}.journal-detail-body button{display:block;width:100%;border:0;background:white;color:#1ea0cf;font-size:19px;padding:18px}.journal-detail-body button.danger{color:#ef5f67}.journal-form-sheet input{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:22px;background:#f8fafc;font-size:18px;padding:14px;color:#000}.water-main{position:relative}.water-alerts{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px}.water-alert-badge{width:36px;height:36px;border-radius:50%;background:white;color:#111;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.12)}.water-alert-badge ha-icon{--mdc-icon-size:24px}.temp-alert-settings input{width:90px;border:0;background:#555;color:white;border-radius:8px;padding:8px;text-align:center;font-size:16px}.temp-alert-settings .diag-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center}.expert-help{font-size:13px;color:#536176;line-height:1.35;margin-top:10px}.pool-alert-green_algae_risk ha-icon{color:#111}.pool-alert-water_cold ha-icon,.pool-alert-water_hot ha-icon{color:#111}.settings-sheet{background:#f2f5f8;color:#14233b}.settings-scroll{padding:0 0 36px}.settings-card{background:white;border-radius:16px;padding:12px 14px;margin:0 0 18px;box-shadow:0 4px 18px rgba(22,42,70,.06)}.settings-row{display:grid;grid-template-columns:1fr 96px 42px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #e8edf5}.settings-row:last-child{border-bottom:0}.settings-row label{font-size:16px;font-weight:800}.settings-row input{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:14px;padding:10px;text-align:center;font-size:18px;color:#000;background:white}.settings-row span{font-weight:800;color:#536176}.settings-actions{display:flex;gap:12px;margin-top:22px}.settings-actions button{flex:1;border:0;border-radius:22px;padding:14px;font-size:17px;font-weight:800;background:white;color:#14233b}.settings-actions button.primary{background:#16a9d8;color:white}.settings-help{font-size:13px;color:#536176;margin-top:14px;line-height:1.35}.alert-head-orange{background:#ff8a4a!important}.alert-head-orange ha-icon{color:white!important}.pool-alert-stock_low ha-icon,.pool-alert-analyseur_eau_battery_low ha-icon,.pool-alert-storm ha-icon{color:#111}.vigilance-sheet .vig-score{display:flex;justify-content:space-between;align-items:center;background:#fff3dd;color:#14233b;border-radius:18px;padding:16px 18px;margin:12px 0 18px}.vig-score span{font-weight:800}.vig-score strong{font-size:34px}.vig-summary{font-size:17px;line-height:1.35;color:#26364f}.vig-section{margin-top:20px}.vig-section h3{margin:0 0 10px;font-size:20px;color:#14233b}.vig-section p{margin:8px 0;font-size:16px;line-height:1.35}.vig-point{display:grid;grid-template-columns:36px 1fr 50px;gap:10px;align-items:center;background:#f6f8fb;border-radius:14px;padding:12px;margin:8px 0;color:#14233b}.vig-point ha-icon{--mdc-icon-size:28px;color:#f39a2d}.vig-point strong{display:block;font-size:16px}.vig-point span{display:block;font-size:14px;line-height:1.25;color:#536176}.vig-point em{display:inline-block;margin-top:4px;font-style:normal;font-weight:800}.vig-point b{text-align:right;color:#f39a2d}.vig-empty{background:#f6f8fb;border-radius:14px;padding:14px;color:#536176}@media(max-width:430px){.strip-range-head strong{font-size:15px}.strip-range-head span{font-size:13px}.strip-range-bar{height:34px}.strip-marker{height:48px;min-width:48px}.strip-marker b{min-width:38px;height:38px;font-size:14px}.strip-row{grid-template-columns:36px minmax(92px,1.1fr) minmax(64px,.8fr) auto minmax(64px,.8fr) auto;gap:6px}.strip-row b{font-size:16px}.strip-row input{font-size:18px;padding:8px}.strip-row span{font-size:15px}.analysis-equipment{grid-template-columns:1fr 1fr}.device-mini{grid-template-columns:40px 1fr 44px;padding:12px}.device-mini span{font-size:13px}.gauges{gap:5px}.ph-svg,.speed-svg{width:125px;height:125px}.pill{min-width:105px;font-size:14px}.control-device{grid-template-columns:44px 1fr auto}.heat-controls{grid-column:1/-1}.water-zone{min-height:455px}}`;
+  }
 }
- _call(e,action='toggle',value=null){if(!e||!this._hass)return Promise.resolve();const d=this._domain(e);if(d==='button'||d==='input_button')return this._hass.callService(d,'press',{entity_id:e});if(d==='script')return this._hass.callService('script','turn_on',{entity_id:e});if(d==='climate'){if(['heat','cool','auto'].includes(action))return this._hass.callService('climate','set_hvac_mode',{entity_id:e,hvac_mode:action});if(action==='set_temperature')return this._hass.callService('climate','set_temperature',{entity_id:e,temperature:value});return this._hass.callService('climate',action==='off'?'turn_off':action==='on'?'turn_on':'toggle',{entity_id:e})}if(['switch','input_boolean','light','fan'].includes(d))return this._hass.callService(d,action==='on'?'turn_on':action==='off'?'turn_off':'toggle',{entity_id:e});if(d==='automation')return this._hass.callService('automation','trigger',{entity_id:e});return this._hass.callService('homeassistant',action==='on'?'turn_on':action==='off'?'turn_off':'toggle',{entity_id:e})}
- _callConfirm(){const c=this.config||{};if(c.confirm_action_entity)this._call(c.confirm_action_entity,'press');else if(this._hass)this._hass.callService('button','press',{entity_id:'button.piscine_valider_action_recommandee'}).catch(()=>{})}
- _pct(v,min,max){const n=parseFloat(String(v).replace(',','.'));return Number.isFinite(n)?Math.max(0,Math.min(1,(n-min)/(max-min))):.5}
- _polar(cx,cy,r,a){const rad=(a-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)}}
- _arc(cx,cy,r,a1,a2){const s=this._polar(cx,cy,r,a2),e=this._polar(cx,cy,r,a1),large=a2-a1<=180?0:1;return`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`}
- _phGauge(value){const n=parseFloat(String(value??'').replace(',','.')),display=Number.isFinite(n)?n.toFixed(2).replace(/0+$/,'').replace(/[.,]$/,'').replace('.',','):'—',min=Number(this.config.ph_min||6.8),max=Number(this.config.ph_max||7.8),pct=this._pct(value,min,max),end=-135+pct*270,status=this._phStatus(value),p=this._polar(70,70,54,end);return`<div class="gauge ph-gauge"><svg viewBox="0 0 140 140" class="ph-svg"><path class="ph-track" d="${this._arc(70,70,54,-135,135)}"/><path class="ph-progress" d="${this._arc(70,70,54,-135,end)}"/><circle class="ph-dot" cx="${p.x}" cy="${p.y}" r="10"/><text x="70" y="78" text-anchor="middle">${display}</text></svg><div class="gauge-value gauge-value-placeholder" aria-hidden="true">&nbsp;</div><div class="gauge-label">pH</div><div class="pill ${this._qualityClass(status)}">${this._statusIcon(status)}${this._labelState(status)}</div></div>`}
- _resolvedDisinfectionMode(){const c=this.config||{},s=this._state(c.disinfection_mode_entity),raw=String(s?.state??s?.attributes?.disinfection_mode??c.disinfection_mode??'auto').toLowerCase();if(raw.includes('orp')||raw.includes('redox'))return'orp';if(raw.includes('chlor'))return'chlorine';return'auto'}
- _chlorineGauge(){const mode=this._resolvedDisinfectionMode(),hasChl=this._num(this.config.chlorine_entity)!==null,hasOrp=this._num(this.config.orp_entity)!==null,isChl=mode==='chlorine'||(mode==='auto'&&hasChl),raw=isChl?this._num(this.config.chlorine_entity):this._num(this.config.orp_entity),min=Number(isChl?this.config.chlorine_min:this.config.orp_min)||(isChl?0:400),max=Number(isChl?this.config.chlorine_max:this.config.orp_max)||(isChl?5:900),pct=raw===null?.5:Math.max(0,Math.min(1,(raw-min)/(max-min))),angle=-112+pct*224,status=this._chlStatus(),label=isChl?'Chlore':'ORP',valueLabel=raw===null?'—':isChl?`${raw.toFixed(1).replace('.',',')} ppm`:`${Math.round(raw)} mV`;let ticks='';for(let i=0;i<13;i++){const a=-112+i*(224/12),p1=this._polar(70,70,50,a),p2=this._polar(70,70,i%3===0?37:43,a);ticks+=`<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`}return`<div class="gauge chlorine-gauge"><svg viewBox="0 0 140 140" class="speed-svg"><path class="speed-track" d="${this._arc(70,70,50,-112,112)}"/><g class="ticks">${ticks}</g><line class="speed-needle" x1="70" y1="70" x2="70" y2="28" style="transform:rotate(${angle}deg);transform-origin:70px 70px"/><circle class="hub" cx="70" cy="70" r="5"/></svg><div class="gauge-value">${valueLabel}</div><div class="gauge-label">${label}</div><div class="pill ${this._qualityClass(status)}">${this._statusIcon(status)}${this._labelState(status)}</div></div>`}
- _smallDevice(label,icon,entity){return`<div class="device-mini ${!entity?'disabled':''}"><ha-icon icon="${icon}"></ha-icon><span>${label}</span>${entity?`<button class="mini-power ${this._isOn(entity)?'on':''}" data-action="toggle" data-entity="${entity}"><ha-icon icon="mdi:power"></ha-icon></button>`:`<button class="mini-power"><ha-icon icon="mdi:plus"></ha-icon></button>`}</div>`}
- _controlPanel(){const c=this.config||{};return`<div class="control-panel">${c.enable_filter_pump?this._filterControl():''}${c.enable_heatpump?this._heatpumpControl():''}${c.enable_electrolyzer?this._electrolyzerControl():''}${c.enable_counter_current?this._controlDevice('Nage à contre-courant','mdi:waves-arrow-right',c.counter_current_entity,'Commande auxiliaire'):''}${c.enable_lighting?this._controlDevice('Éclairage','mdi:lightbulb-outline',c.lighting_entity,'Commande éclairage'):''}${c.enable_aux1?this._controlDevice(c.aux1_label||'Auxiliaire 1','mdi:electric-switch',c.aux1_entity,'Contact auxiliaire'):''}${c.enable_aux2?this._controlDevice(c.aux2_label||'Auxiliaire 2','mdi:electric-switch',c.aux2_entity,'Contact auxiliaire'):''}</div>`}
- _electrolyzerControl(){const c=this.config||{},advanced=c.electrolyzer_mode==='advanced',on=this._isOn(c.electrolyzer_entity),status=this._state(c.electrolyzer_status_entity)?.state||this._state(c.electrolyzer_entity)?.state||'—',raw=this._num(c.electrolyzer_output_entity),output=raw===null?0:Math.max(0,Math.min(100,raw));return`<div class="control-device electrolyzer ${advanced?'advanced':''}"><ha-icon icon="mdi:creation-outline"></ha-icon><div><strong>Électrolyseur</strong><span>${advanced?`${status} · ${Math.round(output)} %`:status}</span></div><div class="control-buttons"><button class="round ${on?'on':''}" data-action="toggle" data-entity="${c.electrolyzer_entity||''}"><ha-icon icon="mdi:power"></ha-icon></button>${advanced&&c.electrolyzer_boost_entity?`<button class="round boost ${this._isOn(c.electrolyzer_boost_entity)?'on':''}" title="Boost" data-action="toggle" data-entity="${c.electrolyzer_boost_entity}"><ha-icon icon="mdi:rocket-launch-outline"></ha-icon></button>`:''}</div>${advanced&&c.electrolyzer_output_entity?`<div class="electro-output"><label>Production <b>${Math.round(output)} %</b></label><input type="range" min="0" max="100" step="1" value="${Math.round(output)}" data-electro-output="${c.electrolyzer_output_entity}"></div>`:''}</div>`}
- _filterControl(){const c=this.config||{};return`<div class="control-device"><ha-icon icon="mdi:pool"></ha-icon><div><strong>Filtration</strong><span>${c.filtration_duration_entity?'Durée recommandée : '+this._format(c.filtration_duration_entity):'Pompe de filtration'}</span></div><div class="control-buttons two"><button title="Marche/arrêt manuel" class="round ${this._isOn(c.pump_entity)?'on':''}" data-action="toggle" data-entity="${c.pump_entity||''}"><ha-icon icon="mdi:power"></ha-icon></button><button title="Activer/désactiver filtration automatique Pool Pilot" class="round auto ${this._autoActive()?'on':''}" data-action="auto_schedule" data-entity=""><span class="bolt">ϟ</span><small>A</small></button></div></div>`}
- _heatpumpControl(){const c=this.config||{},opt=this._optState(c.heatpump_entity)||{},real=String(this._state(c.heatpump_entity)?.state??this._value(c.heatpump_entity,'off')).toLowerCase(),mode=String(opt.state??real).toLowerCase(),target=opt.temperature??this._state(c.heatpump_entity)?.attributes?.temperature??this._value(c.heatpump_temp_entity,'—'),on=!['off','unavailable','unknown',''].includes(mode);return`<div class="control-device heat"><ha-icon icon="mdi:heat-pump-outline"></ha-icon><div><strong>Pompe à chaleur</strong><span>${mode||'off'}</span></div><button class="round ${on?'on':''}" data-action="toggle" data-entity="${c.heatpump_entity||''}"><ha-icon icon="mdi:power"></ha-icon></button><div class="heat-controls"><button class="mode ${mode==='heat'?'active':''}" data-hvac="heat">Chauffage</button><button class="mode ${mode==='auto'?'active':''}" data-hvac="auto">Auto</button><button class="mode ${mode==='cool'?'active':''}" data-hvac="cool">Refroid.</button><div class="temp"><button data-temp="-0.5">−</button><strong>${target==='—'?'—°C':target+'°C'}</strong><button data-temp="0.5">+</button></div></div></div>`}
- _controlDevice(label,icon,entity,sub){return`<div class="control-device"><ha-icon icon="${icon}"></ha-icon><div><strong>${label}</strong><span>${sub||'Commande'}</span></div><div class="control-buttons"><button class="round ${this._isOn(entity)?'on':''}" data-action="toggle" data-entity="${entity||''}"><ha-icon icon="mdi:power"></ha-icon></button></div></div>`}
- _productCategoryLabel(cat){const labels={ph_minus:'pH-',ph_plus:'pH+',chlorine:'Chlore lent',chlorine_slow:'Chlore lent',chlorine_shock:'Chlore choc',chlorine_liquid:'Chlore liquide',bromine:'Brome',active_oxygen:'Oxygène actif',alkalinity:'TAC+',alkalinity_minus:'TAC-',hardness_plus:'TH+',hardness_minus:'TH-',stabilizer:'Stabilisant',algaecide:'Anti-algues',anti_algae:'Anti-algues',flocculant:'Floculant',clarifier:'Clarifiant',wintering:'Hivernage',salt:'Sel',other:'Autre'};return labels[cat]||cat||'Produit'}
- _products(){let ps=[];const ph=this._state(this.config.pool_house_entity);if(ph?.attributes?.products)ps=ph.attributes.products.map(p=>({state:p.stock_quantity??p.stock??'—',entity_id:p.id||p.name,attributes:{...p,friendly_name:p.name,brand:p.brand||p.manufacturer||'',category:p.category,category_label:p.category_label,product_type:p.category,unit_of_measurement:p.stock_unit||p.unit||'',stock_max:p.initial_stock_quantity||p.stock_initial||p.stock_quantity||100,product_id:p.id,id:p.id}}));const extra=String(this.config.product_entities||'').split(',').map(x=>x.trim()).filter(Boolean).map(e=>this._state(e)).filter(Boolean);return ps.concat(extra)}
- _poolHousePanel(){const ps=this._products();return`<div class="full-sheet poolhouse-sheet"><div class="sheet-top"><button data-panel=""><ha-icon icon="mdi:close"></ha-icon></button><h2>Pool House</h2><button data-panel="addProduct"><ha-icon icon="mdi:plus"></ha-icon></button></div><div class="seg"><button class="active">Produits</button><button>Équipements</button></div><div class="product-list">${ps.length?ps.map(s=>this._productCard(s)).join(''):'<div class="empty">Aucun produit configuré. Ajoute les capteurs de stock dans l’éditeur visuel ou crée un produit.</div>'}</div></div>`}
- _productCard(s){const name=s.attributes.friendly_name||s.entity_id,brand=s.attributes.brand||s.attributes.manufacturer||'',cat=this._productCategoryLabel(s.attributes.category||s.attributes.product_type||'Produit'),unit=s.attributes.unit_of_measurement||'',stock=parseFloat(s.state),max=parseFloat(s.attributes.stock_max||s.attributes.max||s.attributes.initial_stock||100),pct=Number.isFinite(stock)&&Number.isFinite(max)&&max>0?Math.max(0,Math.min(100,stock/max*100)):60;return`<div class="product-card"><button class="delete" data-product-delete="${s.attributes.product_id||name}"><ha-icon icon="mdi:close"></ha-icon></button><span class="tag">${cat}</span><strong>${name}</strong><em>${brand}</em><div class="stock"><i style="width:${pct}%"></i></div><div class="stock-label">${s.state}${unit?' '+unit:''}</div><button class="edit" data-product-edit="${s.attributes.product_id||name}"><ha-icon icon="mdi:pencil-outline"></ha-icon></button></div>`}
- _field(name,d=''){const p=this._editingProduct||{},a=p.attributes||p;let v=a[name];if((v===undefined||v===null||v==='')&&a.notes){try{const n=typeof a.notes==='string'?JSON.parse(a.notes):a.notes;if(n&&typeof n==='object'&&n[name]!==undefined)v=n[name]}catch(e){}}if(v===undefined&&name==='product_type')v=a.category;if(v===undefined&&name==='stock')v=a.stock_quantity??p.state;if(v===undefined&&name==='unit')v=a.stock_unit||a.unit_of_measurement;if(v===undefined&&name==='dose_unit')v=a.dosage_unit;if(v===undefined&&name==='reference_volume_m3')v=a.volume_basis_m3;if(v===undefined&&name==='normal_dose_amount')v=a.dosage_quantity;if(v===undefined&&name==='ph_delta')v=a.effect_delta;return v??d}
- _selected(name,val){return String(this._field(name,''))===String(val)?' selected':''}
- _addProductPanel(){const editing=!!this._editingProduct,id=this._field('product_id',this._field('id',''));return`<div class="full-sheet add-product"><div class="sheet-top"><button data-panel="poolhouse"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>${editing?'Modifier le produit':'Nouveau produit'}</h2><button data-add-product="1"><ha-icon icon="mdi:check"></ha-icon></button></div><input type="hidden" name="id" value="${id||''}"><div class="section-title">Votre produit</div><label>Type<select name="product_type"><optgroup label="Désinfectants"><option value="chlorine_slow"${this._selected('product_type','chlorine_slow')||this._selected('product_type','chlorine')}>Chlore lent</option><option value="chlorine_shock"${this._selected('product_type','chlorine_shock')}>Chlore choc</option><option value="chlorine_liquid"${this._selected('product_type','chlorine_liquid')}>Chlore liquide</option><option value="bromine"${this._selected('product_type','bromine')}>Brome</option><option value="active_oxygen"${this._selected('product_type','active_oxygen')}>Oxygène actif</option><option value="salt"${this._selected('product_type','salt')}>Sel / électrolyse</option></optgroup><optgroup label="Correcteurs"><option value="ph_minus"${this._selected('product_type','ph_minus')}>pH-</option><option value="ph_plus"${this._selected('product_type','ph_plus')}>pH+</option><option value="alkalinity"${this._selected('product_type','alkalinity')}>TAC+</option><option value="alkalinity_minus"${this._selected('product_type','alkalinity_minus')}>TAC-</option><option value="hardness_plus"${this._selected('product_type','hardness_plus')}>TH+</option><option value="hardness_minus"${this._selected('product_type','hardness_minus')}>TH-</option><option value="stabilizer"${this._selected('product_type','stabilizer')}>Stabilisant</option></optgroup><optgroup label="Traitements"><option value="algaecide"${this._selected('product_type','algaecide')||this._selected('product_type','anti_algae')}>Anti-algues</option><option value="flocculant"${this._selected('product_type','flocculant')}>Floculant</option><option value="clarifier"${this._selected('product_type','clarifier')}>Clarifiant</option><option value="wintering"${this._selected('product_type','wintering')}>Hivernage</option><option value="other"${this._selected('product_type','other')}>Autre</option></optgroup></select></label><label>Nom<input name="name" placeholder="Ex : Bayrol Chloriklar" value="${this._field('friendly_name',this._field('name',''))}"></label><label>Marque<input name="brand" placeholder="Cash Piscine" value="${this._field('brand','')}"></label><div class="section-title">Détails sur le produit</div><label>Forme du produit<select name="form"><option value="granules"${this._selected('form','granules')}>Granulés</option><option value="powder"${this._selected('form','powder')}>Poudre</option><option value="liquid"${this._selected('form','liquid')}>Liquide</option><option value="tablet"${this._selected('form','tablet')}>Pastilles</option><option value="pebble"${this._selected('form','pebble')}>Galets</option></select></label><label>Stock total<input name="stock" type="number" step="0.1" placeholder="5" value="${this._field('stock','')}"></label><label>Unité de stock<select name="unit"><option value="kg"${this._selected('unit','kg')}>kg</option><option value="g"${this._selected('unit','g')}>g</option><option value="L"${this._selected('unit','L')}>L</option><option value="ml"${this._selected('unit','ml')}>ml</option><option value="pastille"${this._selected('unit','pastille')}>pastille(s)</option><option value="galet"${this._selected('unit','galet')}>galet(s)</option></select></label><label>Poids unitaire (g)<input name="unit_weight_g" type="number" step="0.1" placeholder="20" value="${this._field('unit_weight_g','')}"></label><div class="switch-grid"><span>Multifonction</span><select name="multifunction"><option value="false"${this._selected('multifunction',false)}>Non</option><option value="true"${this._selected('multifunction',true)}>Oui</option></select><span>Dissolution</span><select name="dissolution"><option value="fast"${this._selected('dissolution','fast')}>Rapide</option><option value="slow"${this._selected('dissolution','slow')}>Lente</option></select><span>Stabilisant</span><select name="stabilized"><option value="false"${this._selected('stabilized',false)}>Non</option><option value="true"${this._selected('stabilized',true)}>Oui</option></select></div><div class="section-title">Dosage normal</div><label>Unité de dosage<select name="dose_unit"><option value="g"${this._selected('dose_unit','g')}>g</option><option value="kg"${this._selected('dose_unit','kg')}>kg</option><option value="ml"${this._selected('dose_unit','ml')}>ml</option><option value="L"${this._selected('dose_unit','L')}>L</option><option value="pastille"${this._selected('dose_unit','pastille')}>pastille(s)</option><option value="galet"${this._selected('dose_unit','galet')}>galet(s)</option></select></label><label>Volume d’eau de référence (m³)<input name="reference_volume_m3" type="number" step="0.1" placeholder="10" value="${this._field('reference_volume_m3','')}"></label><p class="help">Exemple pH- : 100 g pour 10 m³ afin de baisser le pH de 0,1. Exemple galets : 5 pastilles pour 10 m³.</p><label>Quantité à insérer<input name="normal_dose_amount" type="number" step="0.1" placeholder="100" value="${this._field('normal_dose_amount','')}"></label><label>Variation pH visée<input name="ph_delta" type="number" step="0.01" placeholder="0.1" value="${this._field('ph_delta','')}"></label><label>Lieu de traitement<select name="treatment_place"><option value="skimmer"${this._selected('treatment_place','skimmer')}>Dans le skimmer</option><option value="pool"${this._selected('treatment_place','pool')}>Directement dans le bassin</option><option value="pump"${this._selected('treatment_place','pump')}>Devant les buses de refoulement</option><option value="feeder"${this._selected('treatment_place','feeder')}>Doseur / électrolyseur</option></select></label><div class="section-title">Dosage choc</div><label>Quantité à insérer<input name="shock_dose_amount" type="number" step="0.1" value="${this._field('shock_dose_amount','')}"></label><div class="section-title">Dosage initial</div><label>Quantité à insérer<input name="initial_dose_amount" type="number" step="0.1" value="${this._field('initial_dose_amount','')}"></label></div>`}
- _chemistryIntel(){const a=this._state(this.config.action_summary_entity||this.config.actions_entity)?.attributes||{};const smart=this._state(this._smartFiltrationEntity())?.attributes||{};return {...a,...smart}}
- _lsiStatusLabel(s){return {corrosive:'Corrosive',agressive:'Agressive',equilibree:'Équilibrée',entartrante:'Entartrante',tres_entartrante:'Très entartrante',incomplet:'Incomplet'}[s]||s||'—'}
- _smartFiltrationInfo(){const smart=this._state(this._smartFiltrationEntity());const action=this._state(this.config.action_summary_entity||this.config.actions_entity);const a={...(action?.attributes||{}),...(smart?.attributes||{})};const detail=a.detail||a.auto_schedule_detail||{};let rawStatus=String(a.status||a.auto_schedule_status||smart?.state||'—');const status=this._fmtSmartStatus(rawStatus);const target=a.target_hours??a.auto_schedule_target_hours??this._value(this.config.filtration_duration_entity,'—');const done=a.done_hours??a.auto_schedule_done_hours??'—';const center=a.center_hour??detail.center_hour??this._value(this.config.filtration_center_hour_entity,'12');const win=a.window_label??detail.window_label??((detail.start&&detail.end)?`${detail.start} → ${detail.end}`:`Centrée sur ${center} h`);const nextRaw=a.next_start||a.auto_schedule_next_start||a.next_program||a.next_schedule;const next=nextRaw?this._formatDateTime(nextRaw):'—';const base=detail.base_hours??a.base_hours??'—';const forecast=detail.forecast_temp_c??a.forecast_temp_c??'—';const water=detail.water_temp_c??a.water_temp_c??this._value(this.config.water_temp_entity,'—');const factor=detail.weather_factor??a.weather_factor??this._value(this.config.weather_factor_entity,'—');return`<div class="section-title">Filtration intelligente</div><div class="diag smart-diag"><div>Mode<span>Auto intelligent</span></div><div>État<span>${status}</span></div><div>Cycle du jour<span>${done} h / ${target} h</span></div><div>Planification<span>${win}</span></div><div>Heure centrale<span>${center} h</span></div><div>Prochaine programmation<span>${next}</span></div></div><div class="section-title">Calcul filtration</div><div class="diag smart-diag"><div>Température eau<span>${water} °C</span></div><div>Base<span>${base} h</span></div><div>Météo prévue<span>${forecast} °C</span></div><div>Facteur météo<span>${factor}</span></div></div>`}
- _stripValue(strip,keys,def=''){for(const k of keys){const v=strip?.[k];if(v!==undefined&&v!==null&&String(v)!=='')return v}return def}
- _stripNum(strip,keys){const v=this._stripValue(strip,keys,'');const n=parseFloat(String(v).replace(',','.'));return Number.isFinite(n)?n:null}
- _stripDate(strip){return strip?.datetime||strip?.date_time||strip?.last_update||strip?.updated_at||strip?.timestamp||strip?.date||''}
- _stripRangeRow(label,value,unit,min,max,okMin,okMax,cls,extra=''){const n=parseFloat(String(value??'').replace(',','.'));const has=Number.isFinite(n);const pct=has?Math.max(0,Math.min(100,((n-min)/(max-min))*100)):0;const okLeft=Math.max(0,Math.min(100,((okMin-min)/(max-min))*100));const okRight=Math.max(0,Math.min(100,((okMax-min)/(max-min))*100));const okWidth=Math.max(0,okRight-okLeft);const shown=has?(Number.isInteger(n)?String(n):String(Math.round(n*10)/10)):'—';return`<div class="strip-range-row ${cls}"><div class="strip-range-head"><strong>${label}</strong><span>${shown}${unit?` ${unit}`:''}${extra}</span></div><div class="strip-range-bar"><div class="strip-ok" style="left:${okLeft}%;width:${okWidth}%"></div>${has?`<div class="strip-marker" style="left:${pct}%"><i></i><b>${shown}</b></div>`:''}</div></div>`}
- _stripRangesPanel(strip){const ph=this._stripEntityValue('ph')??this._stripNum(strip,['ph','pH','strip_ph']);const tac=this._stripEntityValue('alkalinity')??this._stripNum(strip,['alkalinity','tac','TAC','strip_alkalinity']);const th=this._stripEntityValue('calcium')??this._stripNum(strip,['calcium','hardness','th','TH','strip_calcium']);const cya=this._stripEntityValue('cya')??this._stripNum(strip,['cya','stabilizer','stabilisant','strip_cya']);const fc=this._stripEntityValue('free_chlorine')??this._stripNum(strip,['free_chlorine','chlorine_free','chlore_libre','strip_free_chlorine']);const tc=this._stripEntityValue('total_chlorine')??this._stripNum(strip,['total_chlorine','chlorine_total','chlore_total','strip_total_chlorine']);const date=this._stripDate(strip);const dateLine=date?`<div class="strip-last-date">Test effectué le ${date}</div>`:'';return`<div class="section-title strip-last-title">Test bandelette — dernier test</div><div class="strip-ranges-card">${dateLine}${this._stripRangeRow('Hardness (TH)',th,'ppm',0,500,150,300,'hardness',th!==null?` (${this._toFrenchDeg(th)} °f)`:``)}${this._stripRangeRow('Alcalinité (TAC)',tac,'ppm',0,240,80,160,'alkalinity',tac!==null?` (${this._toFrenchDeg(tac)} °f)`:``)}${this._stripRangeRow('Stabilisant (CYA)',cya,'ppm',0,150,30,60,'stabilizer')}${this._stripRangeRow('Chlore total',tc,'ppm',0,10,1,4,'total-chlorine')}${this._stripRangeRow('Chlore libre',fc,'ppm',0,10,1,3,'free-chlorine')}${this._stripRangeRow('pH',ph,'',6.2,8.4,7.0,7.6,'ph')}<div class="strip-range-help">Les zones bleues représentent les intervalles de valeurs recommandées.</div></div>`}
-
- _manualEntityState(key){const id=this.config?.[key];return id?this._state(id):undefined}
- _manualAttr(entityKey, attr, fallback='—'){const st=this._manualEntityState(entityKey);const v=st?.attributes?.[attr];return v===undefined||v===null||v===''?fallback:v}
- _fmtHourValue(v){if(v===undefined||v===null||v===''||isNaN(Number(v)))return '— h';return `${Number(v).toFixed(1).replace('.',',')} h`}
- _fmtTempValue(v){if(v===undefined||v===null||v===''||isNaN(Number(v)))return '— °C';return `${Number(v).toFixed(1).replace('.',',')} °C`}
- _smartDetail(){const st=this._manualEntityState('smart_filtration_entity')||this._manualEntityState('action_summary_entity')||this._manualEntityState('recommended_filter_entity');return st?.attributes?.detail||st?.attributes?.auto_schedule_detail||{}}
- _smartAttrs(){const st=this._manualEntityState('smart_filtration_entity')||this._manualEntityState('action_summary_entity');return st?.attributes||{}}
- _historySourceLabel(s){const v=String(s||'').toUpperCase();if(v==='BAN'||v.includes('STRIP'))return 'BAN';if(v==='BLE'||v.includes('LIVE')||v.includes('FLIPR'))return 'BLE';return v||'—'}
- _lastRawMeasurements(){const strip=this._state(this.config.strip_test_entity);let rows=strip?.attributes?.measurements||strip?.attributes?.last_measurements||[];if(!Array.isArray(rows)||!rows.length){rows=this._state(this.config.raw_measurements_entity)?.attributes?.measurements||[]}if((!Array.isArray(rows)||!rows.length)&&this._lastStripPayload){const p=this._lastStripPayload;rows=[{datetime:p.updated_at_local||new Date().toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),ph:p.ph,orp:this._value(this.config.orp_entity,'—'),temp:p.temperature||this._value(this.config.water_temp_entity,'—')}]}return Array.isArray(rows)?rows.slice(0,12):[]}
- _expertPanel(){const raw=this._lastRawMeasurements(),strip={...this._getLocalStrip(),...(this._state(this.config.strip_test_entity)?.attributes||{}),...(this._lastStripPayload||{})};const rows=raw.length?raw.slice(0,12).map(r=>`<tr><td>${r.datetime||r.updated_at_local||this._formatDateTime?.(r.updated_at)||'—'}</td><td>${this._historySourceLabel(r.source)}</td><td>${r.ph??'—'}</td><td>${r.orp??'—'}</td><td>${r.temp??r.temperature??'—'}</td></tr>`).join(''):'<tr><td colspan=5>Aucune donnée brute</td></tr>';const v=(k,d='')=>strip[k]??d;const tacF=this._toFrenchDeg(v('alkalinity',''));const thF=this._toFrenchDeg(v('calcium',''));const inp=(name,val,unit,icon,label,extra='',cls='')=>`<div class="strip-row ${cls}"><ha-icon icon="${icon}"></ha-icon><b>${label}</b><input name="${name}" type="number" step="0.01" value="${val??''}"><span>${unit}</span>${extra}</div>`;const autoSt=this._fmtSmartStatus(this._state(this._smartFiltrationEntity())?.state||this._state(this.config.action_summary_entity||this.config.actions_entity)?.attributes?.auto_schedule_status||'—');return`<div class="full-sheet expert-sheet"><div class="sheet-top"><button data-panel="menu"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>Mode Expert</h2><button data-panel=""><ha-icon icon="mdi:close"></ha-icon></button></div><div class="expert-scroll"><div class="section-title">Données brutes</div><div class="raw-box"><table><thead><tr><th>Date</th><th>Src</th><th>pH</th><th>ORP</th><th>Temp</th></tr></thead><tbody>${rows}</tbody></table></div><div class="section-title">Test bandelette</div><div class="strip-card"><div class="strip-tabs single"><button class="active">Formulaire</button></div><div class="strip-form analyseur_eau-strip">${inp('strip_ph',v('ph',''),'','mdi:palette-outline','pH',`<input name="strip_temperature" type="number" step="0.1" value="${v('temperature','')}"><span>°C</span>`,'ph-row')}${inp('strip_alkalinity',v('alkalinity',''),'ppm','mdi:snowflake','TAC',`<input name="strip_alkalinity_f" data-convert-from="strip_alkalinity" type="number" step="0.1" value="${tacF}"><span>°f</span>`,'tac-row')}${inp('strip_calcium',v('calcium',''),'ppm','mdi:ellipse','TH',`<input name="strip_calcium_f" data-convert-from="strip_calcium" type="number" step="0.1" value="${thF}"><span>°f</span>`,'th-row')}${inp('strip_cya',v('cya',''),'ppm','mdi:link-variant','Stabilisant')}${inp('strip_free_chlorine',v('free_chlorine',''),'ppm','mdi:triangle-outline','Chlore libre')}${inp('strip_total_chlorine',v('total_chlorine',''),'ppm','mdi:triangle','Chlore total')}<button class="save-strip" data-save-strip="1">Valider</button></div></div>${this._stripRangesPanel(strip)}<div class="section-title">Diagnostic système</div><div class="diag"><div>Pompe<span>${this._state(this.config.pump_entity)?.state||'non configurée'}</span></div><div>Météo<span>${this._state(this.config.weather_entity)?.state||'non configurée'}</span></div><div>Filtration auto<span>${autoSt}</span></div></div>${this._smartFiltrationInfo()}${this._chlorineLsiPanel()}</div></div>`}
-
- _chlorineLsiPanel(){const a=this._chemistryIntel();const mode=a.chlorine_mode_used==='estimated'?'Estimé ORP':'Mesuré';const source=a.chlorine_source||'—';const fc=a.estimated_free_chlorine??'—';const hocl=a.active_chlorine??'—';const pct=a.active_chlorine_percent??'—';const power=a.disinfection_power||'—';const cya=this._state(this.config.strip_test_entity)?.attributes?.cya??a.cya??'—';const lsi=a.lsi??'—';const lsiStatus=this._lsiStatusLabel(a.lsi_status);return`<div class="section-title">Intelligence chimique</div><div class="diag smart-diag"><div>Mode chlore<span>${mode}</span></div><div>Source chlore<span>${source}</span></div><div>Chlore libre estimé<span>${fc} ppm</span></div><div>Chlore actif HOCl<span>${hocl} ppm (${pct} %)</span></div><div>Pouvoir désinfectant<span>${power}</span></div><div>Stabilisant utilisé<span>${cya} ppm</span></div><div>LSI<span>${lsi} · ${lsiStatus}</span></div></div>`}
- _cfgNum(k,def){const v=this.config?.[k];const n=parseFloat(String(v??'').replace(',','.'));return Number.isFinite(n)?n:def}
- _waterTempNumber(){const raw=this._format(this.config?.water_temp_entity);const n=parseFloat(String(raw??'').replace(',','.').replace(/[^0-9+\-.]/g,''));return Number.isFinite(n)?n:null}
-
-
- _alertStatusEntity(){const c=this.config||{};if(c.alert_status_entity)return c.alert_status_entity;const p=this._poolNamePrefix?this._poolNamePrefix():'piscine';const candidates=[`sensor.${p}_etat_des_alertes`,`sensor.${p}_alert_status`,`sensor.piscine_etat_des_alertes`,`sensor.piscine_alert_status`];return candidates.find(e=>this._state(e))||candidates[0]}
- _hasRealAlert(){const st=this._state(this._alertStatusEntity());if(st)return String(st.state).toLowerCase()==='alerte';const alerts=this._poolAlerts?this._poolAlerts():[];return alerts.length>0}
- _poolAlertsEntity(){const c=this.config||{};if(c.pool_alerts_entity)return c.pool_alerts_entity;const seeds=[c.alerts_entity,c.maintenance_journal_entity,c.raw_measurements_entity,c.filtration_duration_entity].filter(Boolean);for(const s of seeds){const id=String(s).replace(/^sensor\./,'');const prefix=id.split('_')[0]||'piscine';const candidates=[`sensor.${prefix}_pool_alerts`,`sensor.${prefix}_alertes_pool_pilot`,`sensor.piscine_pool_alerts`,`sensor.piscine_alertes_pool_pilot`];const found=candidates.find(e=>this._state(e));if(found)return found}return 'sensor.piscine_pool_alerts'}
- _poolAlerts(){const e=this._state(this._poolAlertsEntity());const a=e?.attributes?.alerts;return Array.isArray(a)?a:[]}
- _poolAlertBadges(){const alerts=this._poolAlerts();if(!alerts.length)return this._waterTempAlertBadges?this._waterTempAlertBadges():'';const shown=alerts.filter(a=>['water_cold','water_hot','green_algae_risk','stock_low','analyseur_eau_battery_low','storm'].includes(a.id)).slice(0,6);if(!shown.length)return'';return `<div class="water-alerts">${shown.map(a=>`<span class="water-alert-badge pool-alert-${a.id||''}" title="${a.title||''}"><ha-icon icon="${a.icon||'mdi:alert-circle-outline'}"></ha-icon></span>`).join('')}</div>`}
- _waterTempAlertBadges(){const t=this._waterTempNumber();if(t===null)return'';const min=this._cfgNum('water_temp_alert_min',6);const max=this._cfgNum('water_temp_alert_max',31);const b=[];if(t<min)b.push('<span class="water-alert-badge" title="Eau trop froide"><ha-icon icon="mdi:snowflake"></ha-icon></span>');if(t>max)b.push('<span class="water-alert-badge" title="Eau trop chaude"><ha-icon icon="mdi:thermometer"></ha-icon></span>');return b.length?`<div class="water-alerts">${b.join('')}</div>`:''}
- _journalEntity(){const c=this.config||{};if(c.maintenance_journal_entity)return c.maintenance_journal_entity;const seeds=[c.strip_test_entity,c.raw_measurements_entity,c.filtration_duration_entity,c.ph_entity].filter(Boolean);for(const s of seeds){const id=String(s).replace(/^sensor\./,'');const prefix=id.split('_')[0]||'piscine';const candidates=[`sensor.${prefix}_maintenance_journal`,`sensor.${prefix}_carnet_d_entretien`,`sensor.${prefix}_carnet_entretien`,`sensor.piscine_maintenance_journal`,`sensor.piscine_carnet_d_entretien`];const found=candidates.find(e=>this._state(e));if(found)return found}return 'sensor.piscine_maintenance_journal'}
- _journalEntries(){const e=this._state(this._journalEntity());return e?.attributes?.entries||e?.attributes?.journal||[]}
- _journalIcon(cat){return {alert:'mdi:close',water_quality:'mdi:close',chemical:'mdi:bottle-tonic-outline',stock:'mdi:package-variant-closed',strip_test:'mdi:test-tube',equipment:'mdi:tools',maintenance:'mdi:tools',cleaning:'mdi:broom',filter:'mdi:filter-outline',drain:'mdi:water-percent',weather:'mdi:weather-lightning',filtration:'mdi:sync',note:'mdi:note-text-outline'}[cat]||'mdi:note-text-outline'}
- _journalColor(cat){return {alert:'#ff1515',water_quality:'#ff1515',chemical:'#459be8',stock:'#c414d9',strip_test:'#2fcbd0',equipment:'#b914d9',maintenance:'#b914d9',cleaning:'#b914d9',filter:'#b914d9',drain:'#2ea8df',weather:'#f59f18',filtration:'#2fcbd0',note:'#64748b'}[cat]||'#64748b'}
- _journalById(id){return this._journalEntries().find(e=>String(e.id)===String(id))||null}
- _journalDetailPanel(){const e=this._journalById(this._selectedJournalId)||{};const cat=e.category||'note',color=e.color||this._journalColor(cat),icon=e.icon||this._journalIcon(cat),date=e.datetime||this._formatDateTime(e.date)||'',title=e.title||e.category_label||'Note',desc=e.description||'';return`<div class="modal-backdrop journal-detail-backdrop" data-close="journal"><div class="journal-detail-sheet" style="--journal-detail-color:${color}"><div class="journal-detail-top"><span>${date}</span></div><div class="journal-detail-head"><ha-icon icon="${icon}"></ha-icon><strong>${title}</strong></div><div class="journal-detail-body"><p>${desc||'Aucun commentaire.'}</p>${e.quantity?`<p><b>Quantité :</b> ${e.quantity}${e.unit?' '+e.unit:''}</p>`:''}${e.percent?`<p><b>Taux :</b> ${e.percent}%</p>`:''}<hr><button data-edit-journal="${e.id||''}">Modifier</button><button class="danger" data-delete-journal="${e.id||''}">Supprimer</button></div></div></div>`}
- _journalEditPanel(){const e=this._journalById(this._selectedJournalId)||{};const cat=this._pendingJournalCat||e.category||'note';return`<div class="full-sheet journal-form-sheet"><div class="journal-form-top"><button data-panel="journalDetail"><span>Annuler</span></button><button data-update-journal="${e.id||''}"><strong>Enregistrer</strong></button></div><h2>Modifier item</h2><button class="journal-select-cat" data-panel="journalCats">${this._journalCategoryLabel(cat)}</button><label>Titre</label><input name="journal_title" value="${e.title||''}"><label>Commentaire</label><textarea name="journal_comment">${e.description||''}</textarea><div class="journal-date-pill"><span>Date</span><strong>${e.datetime||this._formatDateTime(e.date)||''}</strong></div></div>`}
- _journalPanel(){const entries=this._journalEntries();const rows=entries.length?entries.slice(0,100).map((e,i)=>{const side=i%2?'right':'left',cat=e.category||'note',color=e.color||this._journalColor(cat),icon=e.icon||this._journalIcon(cat),title=e.title||e.category_label||'Note',date=e.datetime||this._formatDateTime(e.date)||'';return`<button class="journal-item ${side}" data-journal-open="${e.id||''}"><div class="journal-card"><span class="journal-icon" style="background:${color}"><ha-icon icon="${icon}"></ha-icon></span><strong>${title}</strong></div><div class="journal-date">${date}</div><span class="journal-dot"></span></button>`}).join(''):`<div class="journal-empty">Aucune entrée pour l'instant.</div>`;return`<div class="full-sheet journal-sheet"><div class="journal-header"><button data-panel="menu"><ha-icon icon="mdi:close"></ha-icon></button><h2>Carnet d'entretien</h2><button data-panel="journalAdd"><ha-icon icon="mdi:plus"></ha-icon></button></div><div class="journal-scroll"><div class="journal-line"></div>${rows}</div></div>`}
- _formatDateTime(v){if(v===undefined||v===null||v===''||v==='—')return '—';const s=String(v).trim();let d=null;if(/^\d{4}-\d{2}-\d{2}T/.test(s)||/^\d{4}-\d{2}-\d{2} /.test(s))d=new Date(s);if(d&&Number.isFinite(d.getTime()))return d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', '');return s.replace('T',' ').replace(/\+00:00$/,'').replace(/Z$/,'').replace(/:\d{2}(?:\.\d+)?$/,'')}
- _lastMeasureDisplay(){const e=(this.config||{}).last_measure_entity;if(!e)return '—';const st=this._state(e);const raw=st?.attributes?.updated_at_local||st?.attributes?.updated_at||st?.attributes?.datetime||st?.attributes?.date_time||st?.attributes?.last_update||st?.state||'—';return this._formatDateTime(raw)}
- _journalCategoryLabel(c){return {weather:'Événement climatique',stock:'Gestion des stocks',note:'Note',strip_test:'Nouveau test de bandelettes',equipment:'Nouvel équipement',water_quality:"Qualité de l'eau",cleaning:'Robot / aspirateur',chemical:'Utilisation de produits chimiques',drain:'Vidange de la piscine',filtration:'Filtration',maintenance:'Entretien',filter:'Lavage filtre'}[c]||c}
- _journalCategories(){return ['weather','stock','note','strip_test','equipment','water_quality','cleaning','chemical','drain']}
- _journalCategoriesPanel(){return`<div class="full-sheet journal-form-sheet"><div class="journal-form-top"><button data-panel="journalAdd"><ha-icon icon="mdi:chevron-left"></ha-icon></button><span>Catégories</span></div><h2>Catégories</h2><div class="journal-cats">${this._journalCategories().map(c=>`<button data-journal-cat="${c}">${this._journalCategoryLabel(c)}</button>`).join('')}</div></div>`}
- _journalAddPanel(){const c=this._pendingJournalCat||'note';return`<div class="full-sheet journal-form-sheet"><div class="journal-form-top"><button data-panel="journal"><span>Annuler</span></button><button data-save-journal="1"><strong>Enregistrer</strong></button></div><h2>Nouvel item</h2><button class="journal-select-cat" data-panel="journalCats">${this._journalCategoryLabel(c)}</button><label>Commentaire</label><textarea name="journal_comment"></textarea><div class="journal-date-pill"><span>Date</span><strong>${new Date().toLocaleString('fr-FR',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</strong></div></div>`}
-
- _entityByCandidates(explicitKey,candidates){const c=this.config||{};if(c[explicitKey])return c[explicitKey];for(const e of candidates){if(this._state(e))return e}return candidates[0]||''}
- _poolNamePrefix(){const seeds=[this.config?.pool_alerts_entity,this.config?.maintenance_journal_entity,this.config?.raw_measurements_entity,this.config?.filtration_duration_entity,this.config?.ph_entity].filter(Boolean);for(const s of seeds){const id=String(s).replace(/^number\.|^sensor\./,'');const p=id.split('_')[0];if(p)return p}return'piscine'}
- _numEntity(key){const p=this._poolNamePrefix();const map={target_ph:[`number.${p}_ph_cible`,`number.${p}_target_ph`],target_fc:[`number.${p}_chlore_libre_cible`,`number.${p}_target_fc`],filter_coef:[`number.${p}_coefficient_de_filtration`,`number.${p}_filter_coef`],min_filter_hours:[`number.${p}_filtration_minimum`,`number.${p}_min_filter_hours`],max_filter_hours:[`number.${p}_filtration_maximum`,`number.${p}_max_filter_hours`],water_temp_alert_min:[`number.${p}_seuil_eau_trop_froide`,`number.${p}_water_temp_alert_min`],water_temp_alert_max:[`number.${p}_seuil_eau_trop_chaude`,`number.${p}_water_temp_alert_max`],algae_risk_sensitivity:[`number.${p}_seuil_risque_d_algues`,`number.${p}_algae_risk_sensitivity`],filtration_center_hour:[`number.${p}_heure_centrale_filtration`,`number.${p}_filtration_center_hour`]};return this._entityByCandidates(`${key}_entity`,map[key]||[])}
- _numValue(key,def=''){const e=this._numEntity(key);const v=this._value(e,'');return v===''||v==='unknown'||v==='unavailable'?def:v}
- _settingsRow(label,key,unit,step='0.1'){return`<div class="settings-row"><label>${label}</label><input name="${key}" type="number" step="${step}" value="${this._numValue(key,'')}"><span>${unit||''}</span></div>`}
-
- _notificationPrefs(){const ents=[this._alertStatusEntity(),this.config.actions_entity,this.config.alert_entity,this.config.action_summary_entity].filter(Boolean);for(const e of ents){const a=this._state(e)?.attributes?.notification_preferences;if(a)return a}return {}}
- _notifyInput(name,def=''){const p=this._notificationPrefs();return p[name]??def}
- _notifyChecked(name,def=false){const v=this._notifyInput(name,def);return v===true||v==='true'||v==='on'||v===1||v==='1'}
- _notifySelectedServices(){const p=this._notificationPrefs();let v=p.mobile_services??p.notify_mobile_services??'';if(Array.isArray(v))return v.map(x=>String(x).startsWith('notify.')?String(x):'notify.'+String(x));return String(v||'').split(',').map(x=>x.trim()).filter(Boolean).map(x=>x.startsWith('notify.')?x:'notify.'+x)}
- _notifyAvailableServices(){const p=this._notificationPrefs();let v=p.available_mobile_services??p.available_notify_services??[];if(!Array.isArray(v))v=String(v||'').split(',');const selected=this._notifySelectedServices();const all=[...v.map(x=>String(x).trim()).filter(Boolean),...selected];return [...new Set(all.map(x=>x.startsWith('notify.')?x:'notify.'+x))]}
- _notifyServicesChoices(){const available=this._notifyAvailableServices();const selected=this._notifySelectedServices();if(!available.length)return `<input name="notify_mobile_services" type="text" placeholder="notify.mobile_app_iphone, notify.mobile_app_ipad" value="${selected.join(',')}">`;return `<div class="notify-list">${available.map(s=>`<label class="check"><input type="checkbox" name="notify_service" value="${s}" ${selected.includes(s)?'checked':''}>${s}</label>`).join('')}</div>`}
- _notifyServicesDefault(){const p=this._notificationPrefs();let v=p.mobile_services??p.notify_mobile_services??'';if(Array.isArray(v))v=v.join(',');return v||''}
-
- _settingsPanel(){return`<div class="full-sheet settings-sheet"><div class="sheet-top"><button data-panel="menu"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>Paramètres</h2><button data-panel=""><ha-icon icon="mdi:close"></ha-icon></button></div><div class="settings-scroll"><div class="section-title">Filtration</div><div class="settings-card">${this._settingsRow('Coefficient de filtration','filter_coef','', '0.1')}${this._settingsRow('Durée minimale','min_filter_hours','h','0.5')}${this._settingsRow('Durée maximale','max_filter_hours','h','0.5')}${this._settingsRow('Heure centrale filtration','filtration_center_hour','h','0.5')}</div><div class="section-title">Qualité d’eau</div><div class="settings-card">${this._settingsRow('pH cible','target_ph','', '0.1')}${this._settingsRow('Chlore libre cible','target_fc','ppm','0.1')}</div><div class="section-title">Alertes</div><div class="settings-card">${this._settingsRow('Eau trop froide','water_temp_alert_min','°C','0.1')}${this._settingsRow('Eau trop chaude','water_temp_alert_max','°C','0.1')}${this._settingsRow('Seuil risque algues','algae_risk_sensitivity','%','1')}</div><div class="section-title">Notifications</div><div class="settings-card notify-settings"><label class="check"><input type="checkbox" name="notify_enabled" ${this._notifyChecked('enabled',false)?'checked':''}>Activer les notifications Pool Pilot</label><label class="check"><input type="checkbox" name="notify_persistent" ${this._notifyChecked('persistent',true)?'checked':''}>Notification persistante Home Assistant</label><div class="notify-label">Téléphones / services notify</div>${this._notifyServicesChoices()}<label class="check"><input type="checkbox" name="notify_alerts_enabled" ${this._notifyChecked('alerts_enabled',true)?'checked':''}>Alertes Pool Pilot</label><label class="check"><input type="checkbox" name="notify_recommendations_enabled" ${this._notifyChecked('recommendations_enabled',true)?'checked':''}>Recommandations produit</label><label class="check"><input type="checkbox" name="notify_filtration_enabled" ${this._notifyChecked('filtration_enabled',false)?'checked':''}>Filtration automatique</label><label class="check"><input type="checkbox" name="notify_stock_low_enabled" ${this._notifyChecked('stock_low_enabled',true)?'checked':''}>Stock faible</label><label class="check"><input type="checkbox" name="notify_battery_low_enabled" ${this._notifyChecked('battery_low_enabled',true)?'checked':''}>Batterie faible</label><label class="check"><input type="checkbox" name="notify_strip_test_enabled" ${this._notifyChecked('strip_test_enabled',false)?'checked':''}>Rappel test bandelette</label><label>Délai rappel bandelette <input name="notify_strip_test_days" type="number" step="1" min="1" max="30" value="${this._notifyInput('strip_test_days',7)}"></label><label class="check"><input type="checkbox" name="notify_daily_summary_enabled" ${this._notifyChecked('daily_summary_enabled',false)?'checked':''}>Résumé quotidien</label><label>Heure résumé <input name="notify_daily_summary_time" type="text" placeholder="09:00" value="${this._notifyInput('daily_summary_time','09:00')}"></label><button class="secondary" data-test-notification="1">Envoyer une notification de test</button><div class="settings-help">Tout est exécuté par l’intégration Pool Pilot. Aucune automatisation Home Assistant n’est nécessaire.</div></div><div class="settings-actions"><button data-panel="menu">Annuler</button><button class="primary" data-save-settings="1">Valider</button></div><div class="settings-help">Les valeurs sont envoyées à Pool Pilot au clic sur Valider. Les alertes affichées par la carte viennent ensuite de l’intégration.</div></div></div>`}
- _saveSettings(){const fields=['filter_coef','min_filter_hours','max_filter_hours','target_ph','target_fc','water_temp_alert_min','water_temp_alert_max','algae_risk_sensitivity','filtration_center_hour'];const calls=[];for(const key of fields){const input=this.shadowRoot.querySelector(`[name="${key}"]`);if(!input)continue;const val=parseFloat(String(input.value).replace(',','.'));if(!Number.isFinite(val))continue;const ent=this._numEntity(key);if(!ent)continue;calls.push(this._hass.callService('number','set_value',{entity_id:ent,value:val}))}let services=[...this.shadowRoot.querySelectorAll('[name="notify_service"]:checked')].map(i=>String(i.value||'').trim()).filter(Boolean);const manual=this.shadowRoot.querySelector('[name="notify_mobile_services"]')?.value;if(manual)services=manual.split(',').map(x=>x.trim()).filter(Boolean);services=[...new Set(services.map(s=>s.startsWith('notify.')?s:'notify.'+s))];const days=parseInt(this.shadowRoot.querySelector('[name="notify_strip_test_days"]')?.value||'7',10);const prefs={enabled:!!this.shadowRoot.querySelector('[name="notify_enabled"]')?.checked,persistent:!!this.shadowRoot.querySelector('[name="notify_persistent"]')?.checked,mobile_services:services.join(','),alerts_enabled:!!this.shadowRoot.querySelector('[name="notify_alerts_enabled"]')?.checked,recommendations_enabled:!!this.shadowRoot.querySelector('[name="notify_recommendations_enabled"]')?.checked,filtration_enabled:!!this.shadowRoot.querySelector('[name="notify_filtration_enabled"]')?.checked,stock_low_enabled:!!this.shadowRoot.querySelector('[name="notify_stock_low_enabled"]')?.checked,battery_low_enabled:!!this.shadowRoot.querySelector('[name="notify_battery_low_enabled"]')?.checked,strip_test_enabled:!!this.shadowRoot.querySelector('[name="notify_strip_test_enabled"]')?.checked,strip_test_days:Number.isFinite(days)?Math.max(1,Math.min(30,days)):7,daily_summary_enabled:!!this.shadowRoot.querySelector('[name="notify_daily_summary_enabled"]')?.checked,daily_summary_time:this.shadowRoot.querySelector('[name="notify_daily_summary_time"]')?.value||'09:00'};calls.push(this._hass.callService('pool_pilot','set_notification_preferences',prefs).catch(err=>{console.warn('Pool Pilot notification prefs failed',err)}));Promise.allSettled(calls).then(()=>{this._panel='menu';this.render()}).catch(()=>{this._panel='settings';this.render()})}
- _historyEntities(){const c=this.config||{},mode=this._resolvedDisinfectionMode();return[{key:'temperature',label:'Température',unit:'°C',entity:c.water_temp_entity},{key:'ph',label:'pH',unit:'',entity:c.ph_entity},{key:'disinfection',label:mode==='chlorine'?'Chlore libre':'ORP / RedOx',unit:mode==='chlorine'?'ppm':'mV',entity:mode==='chlorine'?c.chlorine_entity:c.orp_entity}].filter(x=>x.entity)}
- _historyRange(period){const now=new Date(),hours=period==='30d'?720:period==='7d'?168:24;return{start:new Date(now.getTime()-hours*3600000),end:now}}
- async _loadHistory(period=this._historyPeriod||this.config?.history_default_period||'24h'){if(!this._hass||this._historyLoading)return;this._historyPeriod=period;this._historyLoading=true;this._historyError='';this._renderPreservingScroll();try{const ents=this._historyEntities(),ids=ents.map(x=>x.entity).join(','),r=this._historyRange(period),path=`history/period/${encodeURIComponent(r.start.toISOString())}?filter_entity_id=${encodeURIComponent(ids)}&end_time=${encodeURIComponent(r.end.toISOString())}&minimal_response&no_attributes&significant_changes_only=0`;const rows=ids?await this._hass.callApi('GET',path):[];this._historyData={};for(let i=0;i<ents.length;i++){const values=(rows?.[i]||[]).map(x=>({t:new Date(x.last_changed||x.last_updated).getTime(),v:parseFloat(String(x.state).replace(',','.'))})).filter(x=>Number.isFinite(x.t)&&Number.isFinite(x.v));this._historyData[ents[i].key]=values}}catch(err){console.warn('Pool Pilot history failed',err);this._historyError='Historique indisponible. Vérifiez que Recorder est actif.'}finally{this._historyLoading=false;if(this._panel==='history')this._renderPreservingScroll()}}
- _scheduleHistoryRefresh(){if(this._historyLoading||this._historyRefreshTimer)return;this._historyRefreshTimer=setTimeout(()=>{this._historyRefreshTimer=null;if(this._panel==='history'&&!this._historyData)this._loadHistory()},250)}
- _historyChart(def){const rows=this._historyData?.[def.key]||[],w=620,h=220,p=28;if(!rows.length)return`<div class="history-empty">Aucune donnée disponible pour ${def.label}.</div>`;let min=Math.min(...rows.map(x=>x.v)),max=Math.max(...rows.map(x=>x.v));if(min===max){min-=1;max+=1}const t0=rows[0].t,t1=rows[rows.length-1].t||t0+1,pts=rows.map(x=>`${p+(x.t-t0)/(t1-t0||1)*(w-2*p)},${h-p-(x.v-min)/(max-min)*(h-2*p)}`).join(' '),last=rows[rows.length-1].v,fmt=def.key==='ph'?last.toFixed(2).replace('.',','):def.key==='disinfection'&&def.unit==='mV'?Math.round(last):last.toFixed(1).replace('.',',');return`<div class="history-card"><div class="history-head"><div><strong>${def.label}</strong><span>${rows.length} points</span></div><b>${fmt}${def.unit?' '+def.unit:''}</b></div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}"/><line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}"/><polyline points="${pts}"/></svg><div class="history-scale"><span>${min.toFixed(def.key==='ph'?2:1).replace('.',',')} ${def.unit}</span><span>${max.toFixed(def.key==='ph'?2:1).replace('.',',')} ${def.unit}</span></div></div>`}
- _historyPanel(){const period=this._historyPeriod||this.config?.history_default_period||'24h',defs=this._historyEntities();if(!this._historyData&&!this._historyLoading)this._scheduleHistoryRefresh();return`<div class="full-sheet history-sheet"><div class="sheet-top"><button data-panel="menu"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>Historique</h2><button data-history-refresh="1"><ha-icon icon="mdi:refresh"></ha-icon></button></div><div class="history-scroll"><div class="history-periods">${[['24h','24 h'],['7d','7 jours'],['30d','30 jours']].map(([v,l])=>`<button class="${period===v?'active':''}" data-history-period="${v}">${l}</button>`).join('')}</div>${this._historyLoading?'<div class="history-loading"><ha-icon icon="mdi:loading"></ha-icon> Chargement…</div>':this._historyError?`<div class="history-error">${this._historyError}</div>`:defs.map(d=>this._historyChart(d)).join('')}</div></div>`}
-
- _menuPanel(){return`<div class="menu-backdrop" data-close="1"><div class="menu-sheet"><button class="close" data-close="1"><ha-icon icon="mdi:close"></ha-icon></button><div class="logo">pool pilot</div><button data-panel="history"><ha-icon icon="mdi:chart-line"></ha-icon>Historique</button><button data-panel="journal"><ha-icon icon="mdi:timeline-clock-outline"></ha-icon>Carnet d’entretien</button><button data-panel="poolhouse"><ha-icon icon="mdi:home-outline"></ha-icon>Pool House</button><button data-panel="expert"><ha-icon icon="mdi:star-outline"></ha-icon>Mode Expert</button><button data-panel="taylor"><ha-icon icon="mdi:scale-balance"></ha-icon>Balance de Taylor</button><button data-panel="settings"><ha-icon icon="mdi:cog-outline"></ha-icon>Paramètres</button></div></div>`}
-
- _alertStatusEntity(){const c=this.config||{};if(c.alert_status_entity)return c.alert_status_entity;const p=this._poolNamePrefix?this._poolNamePrefix():'piscine';const candidates=[`sensor.${p}_etat_des_alertes`,`sensor.${p}_alert_status`,`sensor.piscine_etat_des_alertes`,`sensor.piscine_alert_status`];return candidates.find(e=>this._state(e))||candidates[0]}
- _primaryAlert(){const s=this._state(this._alertStatusEntity());const p=s?.attributes?.primary_alert;if(p)return p;const a=this._poolAlerts?this._poolAlerts():[];return a&&a.length?a[0]:null}
- _alertSteps(alert){if(alert?.steps&&Array.isArray(alert.steps)&&alert.steps.length)return alert.steps;const id=alert?.id||'';if(id==='storm')return ["Sortez immédiatement les baigneurs de l'eau.","Retirez les bouées et les objets pouvant s'envoler. Le capteur peut rester dans la piscine.","Vérifiez le niveau d'eau et abaissez la ligne d'eau d'environ 3 cm si nécessaire.","En cas de forte activité électrique, coupez l'alimentation de la pompe et des équipements électriques.","Après l'orage, contrôlez le pH, le chlore et relancez la filtration si elle a été arrêtée."];if(id==='green_algae_risk')return ["Réalisez un traitement au chlore choc.","Contrôlez le pH avant le traitement.","Brossez les parois et le fond du bassin.","Filtration continue pendant 24 à 48 h."];if(id==='water_cold')return ["Activez la pompe à chaleur.","Vérifiez la consigne de chauffage.","Laissez la filtration fonctionner normalement."];if(id==='water_hot')return ["Activez le refroidissement de la PAC si disponible.","Augmentez la filtration pendant les heures les plus chaudes.","Contrôlez le pH et le chlore quotidiennement."];if(id==='stock_low')return ["Réapprovisionnez le produit indiqué dans le Pool House.","Mettez à jour le stock après achat."];if(id==='analyseur_eau_battery_low')return ["Remplacez ou rechargez la batterie du capteur.","Vérifiez que les mesures remontent de nouveau."];return ["Suivez les conseils ci-dessous pour résoudre le problème."]}
- _alertTitle(alert){return alert?.title||'Action recommandée'}
- _alertIcon(alert){return alert?.icon||'mdi:alert-outline'}
-
- _vigilanceEntity(){const c=this.config||{};if(c.vigilance_entity)return c.vigilance_entity;const p=this._poolNamePrefix?this._poolNamePrefix():'piscine';const candidates=[`sensor.${p}_vigilance_pool_pilot`,`sensor.${p}_vigilance`,`sensor.piscine_vigilance_pool_pilot`,`sensor.piscine_vigilance`];return candidates.find(e=>this._state(e))||candidates[0]}
- _vigilanceData(){const direct=this._state(this._vigilanceEntity())?.attributes;if(direct&&Object.keys(direct).length)return direct;const s=this._state(this._alertStatusEntity?this._alertStatusEntity():this.config?.alert_status_entity);return s?.attributes?.vigilance||{}}
- _vigilancePanel(){const v=this._vigilanceData()||{},points=Array.isArray(v.points)?v.points:[],score=v.score??0,title=v.title||'Vigilance en cours',summary=v.summary||'Pool Pilot surveille plusieurs indicateurs.',why=v.why_not_alert||'Aucun seuil critique n’est dépassé.',advice=Array.isArray(v.advice)?v.advice:[];const rows=points.length?points.map(p=>`<div class="vig-point"><ha-icon icon="${p.icon||'mdi:eye-outline'}"></ha-icon><div><strong>${p.title||''}</strong><span>${p.message||''}</span>${p.value!==undefined&&p.value!==null?`<em>${p.value}</em>`:''}</div><b>+${p.contribution||0}%</b></div>`).join(''):'<div class="vig-empty">Aucun facteur précis remonté pour le moment.</div>';return`<div class="modal-backdrop" data-close="1"><div class="alert-sheet vigilance-sheet"><button class="close" data-close="1"><ha-icon icon="mdi:close"></ha-icon></button><h1>${title}</h1><div class="vig-score"><span>Indice de vigilance</span><strong>${score}%</strong></div><p class="vig-summary">${summary}</p><div class="vig-section"><h3>Pourquoi ?</h3>${rows}</div><div class="vig-section"><h3>Pourquoi ce n’est pas une alerte ?</h3><p>${why}</p></div>${advice.length?`<div class="vig-section"><h3>Conseils</h3>${advice.map(a=>`<p>✓ ${a}</p>`).join('')}</div>`:''}<div class="alert-actions"><button data-close="1">Fermer</button><button class="done" data-done="6">J’ai compris <ha-icon icon="mdi:check-circle-outline"></ha-icon></button></div></div></div>`}
- _alertPanel(){const c=this.config||{},alert=this._primaryAlert(),steps=this._alertSteps(alert),title=this._alertTitle(alert),icon=this._alertIcon(alert),message=alert?.message||'Suivez les conseils ci-dessous pour résoudre le problème.',stepHtml=steps.map((s,i)=>`<div><b>${i+1}</b><span>${s}</span></div>`).join('');return`<div class="modal-backdrop" data-close="1"><div class="alert-sheet"><button class="close" data-close="1"><ha-icon icon="mdi:close"></ha-icon></button><h1>Alerte en cours</h1><div class="alert-head alert-head-orange"><ha-icon icon="${icon}"></ha-icon><strong>${title} - ${c.title||'Piscine'}</strong><span>${message}</span></div><div class="steps">${stepHtml}</div><div class="alert-actions"><button data-snooze="6">Plus tard</button><button class="done" data-done="24">C’est fait <ha-icon icon="mdi:check-circle-outline"></ha-icon></button></div></div></div>`}
-
-
- _weatherIcon(state){const v=this._norm(state);if(/sunny|clear|soleil/.test(v))return'mdi:weather-sunny';if(/partly|partiel|partlycloudy|cloudy-partly/.test(v))return'mdi:weather-partly-cloudy';if(/cloud|nuage/.test(v))return'mdi:weather-cloudy';if(/rain|pluie|pouring/.test(v))return'mdi:weather-pouring';if(/lightning|storm|orage|thunder/.test(v))return'mdi:weather-lightning';if(/snow|neige|verglas|hail|grele/.test(v))return'mdi:weather-snowy';if(/fog|brouillard/.test(v))return'mdi:weather-fog';if(/wind|vent/.test(v))return'mdi:weather-windy';return'mdi:weather-partly-cloudy'}
- _forecastFromAttributes(){const st=this._state(this.config.weather_entity);const a=st?.attributes||{};const candidates=[a.forecast,a.forecast_hourly,a.forecast_daily,a.forecasts,a.daily,a.hourly,a['forecast hourly'],a['forecast daily']];for(const f of candidates){if(Array.isArray(f)&&f.length){const item=f.find(x=>x&&(x.condition||x.state))||f[0];return item?.condition||item?.state||''}}return''}
- _pickForecastCondition(r,e){const buckets=[r?.forecast,r?.[e]?.forecast,r?.response?.[e]?.forecast,r?.service_response?.[e]?.forecast];for(const f of buckets){if(Array.isArray(f)&&f.length){const item=f.find(x=>x&&(x.condition||x.state))||f[0];return item?.condition||item?.state||''}}return''}
- _ensureWeatherForecast(){const e=this.config?.weather_entity;if(!e||!this._hass||this._forecastLoading===e)return;const fromAttr=this._forecastFromAttributes();if(fromAttr){this._weatherNextState=fromAttr;return}this._forecastLoading=e;const loadWs=async(type)=>{try{const r=await this._hass.callWS({type:'weather/forecast',entity_id:e,forecast_type:type});return this._pickForecastCondition(r,e)}catch(err){}try{const r=await this._hass.callWS({type:'weather/get_forecasts',entity_ids:[e],forecast_type:type});return this._pickForecastCondition(r,e)}catch(err){}try{const r=await this._hass.callWS({type:'weather/get_forecasts',entity_id:e,forecast_type:type});return this._pickForecastCondition(r,e)}catch(err){}try{const r=await this._hass.callWS({type:'execute_script',sequence:[{service:'weather.get_forecasts',target:{entity_id:e},data:{type:type},response_variable:'forecast'}]});return this._pickForecastCondition(r?.forecast||r,e)}catch(err){}return''};Promise.resolve().then(async()=>{const next=await loadWs('hourly')||await loadWs('daily');this._weatherNextState=next||this._state(e)?.state||'';this._weatherForecastTried=true;if(!this._panel)this.render();this._forecastLoading=null})}
- _weatherForecastState(){return this._forecastFromAttributes()||this._weatherNextState||''}
- _vigilanceLevelFromRaw(raw){const v=this._norm(raw);if(!v||['green','vert','0','none','aucune','ok','off','unknown','unavailable'].includes(v))return null;if(/rouge|red|3|4/.test(v))return'red';if(/orange|2/.test(v))return'orange';if(/jaune|yellow|1/.test(v))return'yellow';return null}
- _vigilanceLevel(entity){return this._vigilanceLevelFromRaw(this._value(entity,''))}
- _weatherAlertAttr(entity,names){const st=this._state(entity);if(!st||!st.attributes)return'';const attrs=st.attributes;const wanted=names.map(n=>this._norm(n));for(const [k,v] of Object.entries(attrs)){const nk=this._norm(k).replace(/[_\s]+/g,'-');if(wanted.some(w=>nk===w||nk.includes(w)||w.includes(nk)))return v}return''}
-  _weatherHasSeriousAlert(){const c=this.config||{};const alertEntity=c.weather_alert_entity;if(!alertEntity)return false;const defs=[['Orages','orage','storm','thunderstorm'],['Vent violent','vent-violent','wind'],['Pluie-inondation','pluie-inondation','rain-flood','rain'],['Canicule','heatwave','heat'],['Neige-verglas','neige-verglas','snow-ice','snow']];return defs.some(names=>{const lvl=this._vigilanceLevelFromRaw(this._weatherAlertAttr(alertEntity,names));return lvl==='orange'||lvl==='red'})}
-_weatherAlertBadges(){const c=this.config||{};if(!c.show_weather_alerts)return'';const alertEntity=c.weather_alert_entity;const defs=[{old:'weather_alert_wind_entity',attr:['Vent violent','vent-violent','wind'],icon:'mdi:weather-windy',label:'Vent violent'},{old:'weather_alert_storm_entity',attr:['Orages','orage','storm','thunderstorm'],icon:'mdi:weather-lightning',label:'Orages'},{old:'weather_alert_rain_flood_entity',attr:['Pluie-inondation','pluie-inondation','rain-flood','rain'],icon:'mdi:water-alert',label:'Pluie-inondation'},{old:'weather_alert_heat_entity',attr:['Canicule','heatwave','heat'],icon:'mdi:thermometer-alert',label:'Canicule'},{old:'weather_alert_snow_ice_entity',attr:['Neige-verglas','neige-verglas','snow-ice','snow'],icon:'mdi:snowflake-alert',label:'Neige-verglas'}];const order={red:0,orange:1,yellow:2};return defs.map(d=>{const raw=alertEntity?this._weatherAlertAttr(alertEntity,d.attr):this._value(c[d.old],'');const lvl=this._vigilanceLevelFromRaw(raw);return lvl?{icon:d.icon,label:d.label,lvl}:null}).filter(Boolean).sort((a,b)=>order[a.lvl]-order[b.lvl]).map(a=>`<span class="meteo-alert ${a.lvl}" title="Vigilance ${a.label}"><ha-icon icon="${a.icon}"></ha-icon></span>`).join('')}
- _asNum(v){const n=parseFloat(String(v??'').replace(',','.').replace(/[^0-9+\-.]/g,''));return Number.isFinite(n)?n:null}
- _trendArrow(current,previous,threshold=0.2){const c=this._asNum(current),p=this._asNum(previous);if(c===null||p===null)return '';if(c>=p+threshold)return '↑';if(c<=p-threshold)return '↓';return '→'}
- _lastRawTemps(){const raw=this._state(this.config.raw_measurements_entity)?.attributes?.measurements||[];return Array.isArray(raw)?raw.map(r=>this._asNum(r?.temp??r?.temperature)).filter(v=>v!==null):[]}
- _waterTrend(){const temps=this._lastRawTemps();if(temps.length>=2)return this._trendArrow(temps[0],temps[1],0.2);const e=this.config.water_temp_entity,st=this._state(e);const cur=this._asNum(this._value(e,''));const prev=this._asNum(st?.attributes?.previous_value??st?.attributes?.last_value??st?.attributes?.previous_temperature);return this._trendArrow(cur,prev,0.2)}
- _forecastTempFromWeather(){const w=this._state(this.config.weather_entity);const attrs=w?.attributes||{};const keys=['forecast_temperature','temperature_forecast','next_temperature','forecast_temp','temperature_next'];for(const k of keys){const n=this._asNum(attrs[k]);if(n!==null)return n}const f=attrs.forecast;if(Array.isArray(f)&&f.length){const n=this._asNum(f[0]?.temperature??f[0]?.templow??f[0]?.native_temperature);if(n!==null)return n}return null}
- _airTrend(){const c=this.config||{};const cur=this._asNum(this._value(c.air_temp_entity,''))??this._asNum(this._state(c.weather_entity)?.attributes?.temperature);const next=this._asNum(this._value(c.forecast_temp_entity,''))??this._forecastTempFromWeather();return this._trendArrow(next,cur,0.2)}
- _weatherBlock(air,uv){const c=this.config||{};const w=c.weather_entity?this._state(c.weather_entity):null;const currentIcon=this._weatherIcon(w?.state||'');const next=this._weatherForecastState()||w?.state||'';const nextIcon=this._weatherIcon(next);const alerts=this._weatherAlertBadges();const trend=this._airTrend();return`<div class="weather"><div class="air-block"><span>air</span><strong>${air}</strong>${trend?`<span class="trend-arrow">${trend}</span>`:''}</div><i></i><div class="meteo-block"><div class="meteo-icons"><ha-icon icon="${currentIcon}"></ha-icon><span class="next">›</span><ha-icon icon="${nextIcon}"></ha-icon></div><span class="uv">UV ${uv}</span>${alerts?`<div class="meteo-alerts">${alerts}</div>`:''}</div></div>`}
-
- render(){if(!this.shadowRoot||!this._hass)return;const c=this.config||{},water=`${this._fmtMainTemp(this._value(c.water_temp_entity,''))} °C`,air=this._format(c.air_temp_entity),ph=this._value(c.ph_entity),uv=this._value(c.uv_entity,'0'),last=this._lastMeasureDisplay(),banner=this._banner();const devices=[c.enable_filter_pump?this._smallDevice('Pompe à filtration','mdi:pool',c.pump_entity):'',c.enable_heatpump?this._smallDevice('Pompe à chaleur','mdi:heat-pump-outline',c.heatpump_entity):'',c.enable_electrolyzer?this._smallDevice('Électrolyseur','mdi:creation-outline',c.electrolyzer_entity):'',c.enable_counter_current?this._smallDevice('Nage contre-courant','mdi:waves-arrow-right',c.counter_current_entity):''].join('');this.shadowRoot.innerHTML=`<style>${this.styles()}.taylor-hero{text-align:center;padding:18px}.taylor-hero ha-icon{--mdc-icon-size:72px;color:#0f1b33}.taylor-hero h3{margin:8px 0;font-size:24px}.taylor-hero p{color:#526174;font-size:14px}.taylor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 22px}.taylor-tile{background:#fff;border-radius:14px;padding:18px;text-align:center;box-shadow:0 8px 24px rgba(15,27,51,.06)}.taylor-tile strong{display:block;font-size:26px;color:#0f1b33}.taylor-tile span{display:block;margin-top:8px;font-size:13px;color:#526174}.taylor-result{background:#fff;border-radius:16px;padding:18px;box-shadow:0 8px 24px rgba(15,27,51,.06)}.taylor-result strong{display:block;font-size:20px}.taylor-result span{display:block;margin:8px 0;color:#526174}.taylor-result.good{border-left:6px solid #2bd3b7}.taylor-result.warn{border-left:6px solid #ffb84d}.taylor-result.bad{border-left:6px solid #ff6b6b}.taylor-result.neutral{border-left:6px solid #9aa7b8}.taylor-note{color:#526174;font-size:13px;line-height:1.45;margin:18px 4px 40px}.notify-settings label{display:block;margin:10px 0}.notify-settings input[type=text]{width:100%;box-sizing:border-box;border:1px solid #d9e1ec;border-radius:12px;padding:12px;margin-top:8px}.notify-settings .check{display:flex;gap:10px;align-items:center}.notify-settings .secondary{border:0;border-radius:14px;padding:12px 16px;background:#eef3f8;color:#14233b;font-weight:700;margin-top:8px}.notify-label{font-weight:700;margin:14px 0 8px}.electrolyzer.advanced{grid-template-columns:auto 1fr auto}.electro-output{grid-column:2/4;width:100%;margin-top:10px}.electro-output label{display:flex;justify-content:space-between;font-size:13px;color:#526174}.electro-output input{width:100%;accent-color:#13bfa8}.history-sheet{background:#f4f7fb}.history-scroll{overflow:auto;padding:18px 18px 80px;height:calc(100% - 64px);box-sizing:border-box}.history-periods{display:flex;gap:8px;margin-bottom:16px;position:sticky;top:0;background:#f4f7fb;padding:4px 0 10px;z-index:2}.history-periods button{border:0;border-radius:999px;padding:9px 14px;background:#e5ebf3;font-weight:800}.history-periods button.active{background:#13bfa8;color:#fff}.history-card{background:#fff;border-radius:16px;padding:15px;margin-bottom:14px;box-shadow:0 8px 24px rgba(15,27,51,.06)}.history-head{display:flex;justify-content:space-between;align-items:center}.history-head strong{display:block;font-size:17px}.history-head span{display:block;color:#718096;font-size:12px}.history-head b{font-size:21px}.history-card svg{width:100%;height:210px;margin-top:12px;overflow:visible}.history-card svg line{stroke:#d8e0ea;stroke-width:1}.history-card svg polyline{fill:none;stroke:#13bfa8;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.history-scale{display:flex;justify-content:space-between;color:#718096;font-size:11px}.history-loading,.history-error,.history-empty{padding:28px;text-align:center;background:#fff;border-radius:14px;color:#526174}.history-loading ha-icon{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.notify-list{background:#f7f9fc;border-radius:14px;padding:8px;margin:8px 0 14px}.notify-settings label{display:block;margin:10px 0}.notify-settings input[type=text],.notify-settings input[type=number]{width:100%;box-sizing:border-box;border:1px solid #d9e1ec;border-radius:12px;padding:12px;margin-top:8px}.notify-settings .check{display:flex;gap:10px;align-items:center}.notify-settings .secondary{border:0;border-radius:14px;padding:12px 16px;background:#eef3f8;color:#14233b;font-weight:700;margin-top:8px}</style><ha-card class="pool-card ${c.theme||'analyseur_eau'}"><div class="top"><div class="title">${c.title||'Piscine'}</div><div class="tabs"><button class="tab ${this._tab==='analysis'?'active':''}" data-tab="analysis"><ha-icon icon="mdi:water-outline"></ha-icon>Analyse</button><button class="tab ${this._tab==='control'?'active':''}" data-tab="control"><ha-icon icon="mdi:toggle-switch-outline"></ha-icon>Contrôle</button></div>${this._weatherBlock(air,uv)}</div>${this._tab==='analysis'?`<div class="analysis-equipment">${devices||'<div class="empty-device">Connecter un nouvel équipement</div>'}</div><div class="water-zone"><div class="measure-card"><div class="trophy"><ha-icon icon="mdi:wifi"></ha-icon></div><div><strong>Dernière Mesure</strong><span>${last}</span></div><button class="measure-trigger ${this._measureFlash?'ok':''}" data-action="measure" data-entity="${c.trigger_measure_entity||''}"><ha-icon icon="mdi:radar"></ha-icon></button></div><div class="water-main"><span>eau</span><strong>${water}${this._waterTrend()?` <span class="water-trend">${this._waterTrend()}</span>`:''}</strong>${this._poolAlertBadges()}</div><div class="gauges">${this._phGauge(ph)}${this._chlorineGauge()}</div></div>`:this._controlPanel()}${banner.cls==='bottom-snoozed'?`<div class="bottom-snoozed"><ha-icon icon="${banner.icon}"></ha-icon><span>${banner.text}</span><button data-cancel-snooze="1">Annuler</button></div>`:banner.open?`<button class="${banner.cls}" data-panel="${banner.panel||'alert'}"><ha-icon icon="${banner.icon}"></ha-icon>${banner.text}</button>`:`<div class="${banner.cls}"><ha-icon icon="${banner.icon}"></ha-icon><span>${banner.text}</span></div>`}<div class="bottom-nav"><button data-panel="menu"><ha-icon icon="mdi:waves"></ha-icon><span>Menu</span></button><button class="fin"><ha-icon icon="mdi:shark-fin-outline"></ha-icon></button><button data-panel="poolhouse"><ha-icon icon="mdi:bucket-outline"></ha-icon><span>Pool House</span></button></div>${this._panel==='alert'?this._alertPanel():''}${this._panel==='vigilance'?this._vigilancePanel():''}${this._panel==='menu'?this._menuPanel():''}${this._panel==='history'?this._historyPanel():''}${this._panel==='poolhouse'?this._poolHousePanel():''}${this._panel==='addProduct'?this._addProductPanel():''}${this._panel==='expert'?this._expertPanel():''}${this._panel==='maintenance'?this._journalPanel():''}${this._panel==='journal'?this._journalPanel():''}${this._panel==='journalAdd'?this._journalAddPanel():''}${this._panel==='journalCats'?this._journalCategoriesPanel():''}${this._panel==='settings'?this._settingsPanel():''}${this._panel==='taylor'?this._taylorBalancePanel():''}${this._panel==='journalDetail'?this._journalDetailPanel():''}${this._panel==='journalEdit'?this._journalEditPanel():''}</ha-card>`;this._bind()}
-
- _taylorValue(v,unit=''){if(v===undefined||v===null||v===''||String(v)==='unknown'||String(v)==='unavailable')return '—';const s=String(v);if(unit&&s.includes(unit))return s;return `${v}${unit?` ${unit}`:''}`}
- _taylorClass(status){return {corrosive:'bad',agressive:'warn',equilibree:'good',entartrante:'warn',tres_entartrante:'bad',incomplet:'neutral'}[status]||'neutral'}
-
- _autoPoolEntity(suffixes){const p=this._poolNamePrefix?this._poolNamePrefix():'piscine';const list=[];for(const s of suffixes){list.push(`sensor.${p}_${s}`);list.push(`sensor.piscine_${s}`)}return list.find(e=>this._state(e))||null}
- _autoPoolValue(suffixes,def='—'){const e=this._autoPoolEntity(suffixes);return e?this._value(e,def):def}
- _autoPoolState(suffixes,def='—'){const e=this._autoPoolEntity(suffixes);return e?(this._state(e)?.state??def):def}
- _cleanTaylorNumber(v){if(v===undefined||v===null||v===''||String(v)==='unknown'||String(v)==='unavailable')return '—';return String(v).replace(' ppm','').replace(' °C','')}
-
- _taylorBalancePanel(){const a=this._chemistryIntel();const strip=this._state(this.config.strip_test_entity)?.attributes||{};const ph=strip.ph??this._value(this.config.ph_entity,'—');const tac=strip.alkalinity??strip.tac??a.alkalinity??'—';const th=strip.calcium??strip.th??a.calcium_hardness??'—';const cya=strip.cya??a.cya??'—';const temp=strip.temperature??a.water_temp_c??this._value(this.config.water_temp_entity,'—');const phs=a.phs??a.saturation_ph??this._autoPoolValue(['phs','ph_s','saturation_ph'],'—');const minf=a.minf??a.tds??a.mineralization??this._autoPoolValue(['minf_tds','minf','tds','mineralisation','mineralization'],'—');const lsi=a.lsi??this._autoPoolValue(['lsi'],'—');const rawStatus=a.lsi_status||a.taylor_status||this._autoPoolState(['balance_de_taylor','taylor_balance','etat_balance_de_taylor'],'—');const status=this._lsiStatusLabel(rawStatus);const cls=this._taylorClass(rawStatus);const comment=a.taylor_comment||this._state(this._autoPoolEntity(['balance_de_taylor','taylor_balance','etat_balance_de_taylor'])||'')?.attributes?.comment||'Calcul effectué par Pool Pilot. Les valeurs affichées ici proviennent de l’intégration.';const card=(label,val,unit='')=>`<div class="taylor-tile"><strong>${this._taylorValue(val,unit)}</strong><span>${label}</span></div>`;return`<div class="full-sheet expert-sheet taylor-sheet"><div class="sheet-top"><button data-panel="menu"><ha-icon icon="mdi:arrow-left"></ha-icon></button><h2>Balance de Taylor</h2><button data-panel=""><ha-icon icon="mdi:close"></ha-icon></button></div><div class="expert-scroll"><div class="taylor-hero"><ha-icon icon="mdi:scale-balance"></ha-icon><h3>Bilan hydrique</h3><p>Analyse de l’équilibre calco-carbonique calculée par Pool Pilot côté intégration.</p></div><div class="taylor-grid">${card('TAC',tac,'ppm')}${card('TH',th,'ppm')}${card('CYA / STAB',cya,'ppm')}${card('Temp',temp,'°C')}${card('pH',ph)}${card('pHs',phs)}${card('MINF / TDS',minf)}${card('LSI',lsi)}</div><div class="section-title">Interprétation</div><div class="taylor-result ${cls}"><strong>${status}</strong><span>LSI : ${this._taylorValue(lsi)}</span><p>${comment}</p></div><div class="section-title">Repères</div><div class="diag smart-diag"><div>LSI négatif<span>eau agressive / corrosive</span></div><div>LSI proche de 0<span>équilibre idéal</span></div><div>LSI positif<span>eau entartrante</span></div></div><p class="taylor-note">Les calculs pHs, LSI et MINF/TDS sont effectués par Pool Pilot. La carte affiche uniquement les résultats.</p></div></div>`}
-
- _flashMeasureButton(){this._measureFlash=true;const btn=this.shadowRoot?.querySelector('.measure-trigger');if(btn)btn.classList.add('ok');clearTimeout(this._measureFlashTimer);this._measureFlashTimer=setTimeout(()=>{this._measureFlash=false;const b=this.shadowRoot?.querySelector('.measure-trigger');if(b)b.classList.remove('ok');this.render()},2000)}
- _bind(){this.shadowRoot.querySelectorAll('[data-save-settings]').forEach(b=>b.onclick=e=>{e.stopPropagation();this._saveSettings()});this.shadowRoot.querySelector('[data-test-notification]')?.addEventListener('click',e=>{e.stopPropagation();const b=e.currentTarget;this._hass.callService('pool_pilot','send_test_notification',{}).then(()=>{b.textContent='Test envoyé'}).catch(err=>{console.warn('Pool Pilot test notification failed',err);b.textContent='Erreur test'}).finally(()=>setTimeout(()=>b.textContent='Envoyer une notification de test',2000))});this._restorePanelScroll();this._bindExpertScroll();this._bindStripConversion();this.shadowRoot.querySelectorAll('[data-history-period]').forEach(b=>b.onclick=e=>{e.stopPropagation();this._historyData=null;this._loadHistory(b.dataset.historyPeriod)});this.shadowRoot.querySelectorAll('[data-history-refresh]').forEach(b=>b.onclick=e=>{e.stopPropagation();this._historyData=null;this._loadHistory(this._historyPeriod)});this.shadowRoot.querySelectorAll('[data-electro-output]').forEach(inp=>inp.onchange=e=>{e.stopPropagation();const entity=inp.dataset.electroOutput,value=Number(inp.value);if(!entity||!Number.isFinite(value))return;this._setOpt(entity,{state:value},15000);this._hass.callService('number','set_value',{entity_id:entity,value}).finally(()=>setTimeout(()=>this._safeRender(),700))});this.shadowRoot.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{this._tab=b.dataset.tab;this.render()});this.shadowRoot.querySelectorAll('[data-panel]').forEach(b=>b.onclick=e=>{e.stopPropagation();this._editingProduct=null;const nextPanel=b.dataset.panel||null;if(nextPanel==='expert'&&this._panel!=='expert'){this._panelScroll=0;try{sessionStorage.removeItem(this._key('expert_scroll'))}catch(e){}}this._panel=nextPanel;this.render()});this.shadowRoot.querySelectorAll('[data-close]').forEach(b=>b.onclick=e=>{if(e.target===b||b.tagName==='BUTTON'){this._panel=null;this.render()}});this.shadowRoot.querySelectorAll('[data-cancel-snooze]').forEach(b=>b.onclick=e=>{e.stopPropagation();this._clearSnooze()});this.shadowRoot.querySelectorAll('[data-config-number]').forEach(inp=>inp.onchange=e=>{e.stopPropagation();const key=inp.dataset.configNumber;const val=parseFloat(String(inp.value).replace(',','.'));if(!Number.isFinite(val))return;this.config={...(this.config||{}),[key]:val};this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:this.config},bubbles:true,composed:true}));this.render()});this.shadowRoot.querySelectorAll('[data-journal-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();this._selectedJournalId=b.dataset.journalOpen;this._panel='journalDetail';this.render()});this.shadowRoot.querySelectorAll('[data-edit-journal]').forEach(b=>b.onclick=e=>{e.stopPropagation();this._selectedJournalId=b.dataset.editJournal;const entry=this._journalById(this._selectedJournalId);this._pendingJournalCat=entry?.category||'note';this._panel='journalEdit';this.render()});this.shadowRoot.querySelectorAll('[data-delete-journal]').forEach(b=>b.onclick=e=>{e.stopPropagation();const id=b.dataset.deleteJournal;if(!id)return;this._hass.callService('pool_pilot','remove_journal_entry',{entry_id:id}).then(()=>{this._panel='journal';setTimeout(()=>this.render(),500)}).catch(()=>{this._panel='journal';this.render()})});this.shadowRoot.querySelectorAll('[data-update-journal]').forEach(b=>b.onclick=e=>{e.stopPropagation();const id=b.dataset.updateJournal;if(!id)return;const title=this.shadowRoot.querySelector('[name="journal_title"]')?.value||'';const description=this.shadowRoot.querySelector('[name="journal_comment"]')?.value||'';const category=this._pendingJournalCat||this._journalById(id)?.category||'note';this._hass.callService('pool_pilot','update_journal_entry',{entry_id:id,category,title,description}).then(()=>{this._panel='journal';setTimeout(()=>this.render(),500)}).catch(()=>{this._panel='journal';this.render()})});this.shadowRoot.querySelectorAll('[data-journal-cat]').forEach(b=>b.onclick=e=>{e.stopPropagation();this._pendingJournalCat=b.dataset.journalCat;this._panel=this._selectedJournalId?'journalEdit':'journalAdd';this.render()});this.shadowRoot.querySelectorAll('[data-save-journal]').forEach(b=>b.onclick=e=>{e.stopPropagation();const comment=this.shadowRoot.querySelector('[name="journal_comment"]')?.value||'';const category=this._pendingJournalCat||'note';this._hass.callService('pool_pilot','add_journal_entry',{category,title:this._journalCategoryLabel(category),description:comment}).then(()=>{this._panel='journal';setTimeout(()=>this.render(),500)}).catch(()=>{this._panel='journal';this.render()})});this.shadowRoot.querySelectorAll('[data-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();const action=b.dataset.action||'toggle'; if(action==='measure'){this._flashMeasureButton();if(ent)this._call(ent,'press');return}if(action==='auto_schedule'){const active=this._autoActive();const next=!active;localStorage.setItem(this._key('auto_active'),next?'on':'off');b.classList.toggle('on',next);const ent=b.dataset.entity||'';let p;if(!ent){p=this._hass.callService('pool_pilot',active?'stop_auto_filtration':'start_auto_filtration',{});}else{const d=this._domain(ent);if(['switch','input_boolean'].includes(d))p=this._call(ent,next?'on':'off');else if(d==='button'||d==='input_button')p=this._hass.callService('pool_pilot',active?'stop_auto_filtration':'start_auto_filtration',{}).catch(()=>this._call(ent,'press'));else p=this._call(ent,'toggle');}this.render();Promise.resolve(p).then(()=>{setTimeout(()=>{const ids=[this._smartFiltrationEntity(),this.config.action_summary_entity,this.config.actions_entity,this.config.filtration_duration_entity].filter(Boolean);if(ids.length)this._hass.callService('homeassistant','update_entity',{entity_id:ids}).catch(()=>{});this.render();},700)}).catch(err=>{console.error(err);localStorage.setItem(this._key('auto_active'),active?'on':'off');this.render();});return;} const ent=b.dataset.entity;if(ent&&ent===this.config.heatpump_entity){const n=!this._isOn(ent);this._setOpt(ent,{state:n?'auto':'off'},20000);this.render();Promise.resolve(this._call(ent,n?'on':'off')).finally(()=>setTimeout(()=>this._safeRender(),1500));return;} Promise.resolve(this._call(ent,action)).finally(()=>setTimeout(()=>this._safeRender(),500))});this.shadowRoot.querySelectorAll('[data-hvac]').forEach(b=>b.onclick=()=>{const e=this.config.heatpump_entity,m=b.dataset.hvac;this._setOpt(e,{state:m},12000);this.render();Promise.resolve(this._call(e,m)).finally(()=>setTimeout(()=>this._safeRender(),1000))});this.shadowRoot.querySelectorAll('[data-temp]').forEach(b=>b.onclick=()=>{const e=this.config.heatpump_entity;const rawTemp=(this._optState(e)?.temperature)??(this._state(e)?.attributes?.temperature)??this._value(this.config.heatpump_temp_entity,'0');const cur=parseFloat(rawTemp);if(Number.isFinite(cur)){const t=Math.round((cur+parseFloat(b.dataset.temp))*10)/10;this._setOpt(e,{temperature:t},12000);this.render();Promise.resolve(this._call(e,'set_temperature',t)).finally(()=>setTimeout(()=>this._safeRender(),1000))}});this.shadowRoot.querySelectorAll('[data-snooze]').forEach(b=>b.onclick=()=>this._setSuppress('snooze',Number(b.dataset.snooze||6)));this.shadowRoot.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>this._setSuppress('done',Number(b.dataset.done||24)));this.shadowRoot.querySelectorAll('[data-product-delete]').forEach(b=>b.onclick=e=>{e.stopPropagation();const id=b.dataset.productDelete;if(id&&confirm('Supprimer ce produit du Pool House ?'))this._hass.callService('pool_pilot','remove_product',{product_id:id}).then(()=>{this._panel='poolhouse';this.render()}).catch(err=>console.error('Pool Pilot remove_product failed',err))});this.shadowRoot.querySelectorAll('[data-product-edit]').forEach(b=>b.onclick=e=>{e.stopPropagation();const id=b.dataset.productEdit;this._editingProduct=this._products().find(p=>(p.attributes.product_id||p.entity_id)===id)||null;this._panel='addProduct';this.render()});this.shadowRoot.querySelectorAll('[data-save-strip]').forEach(b=>b.onclick=()=>{const root=this.shadowRoot,num=n=>{const v=parseFloat(String(root.querySelector(`[name="${n}"]`)?.value||'').replace(',','.'));return Number.isFinite(v)?v:null};const payload={ph:num('strip_ph'),alkalinity:num('strip_alkalinity'),calcium:num('strip_calcium'),cya:num('strip_cya'),free_chlorine:num('strip_free_chlorine'),total_chlorine:num('strip_total_chlorine'),temperature:num('strip_temperature')};Object.keys(payload).forEach(k=>payload[k]===null&&delete payload[k]);this._setLocalStrip(payload);this.render();this._hass.callService('pool_pilot','update_strip_test',payload).then(()=>{this._refreshStripEntities();setTimeout(()=>{this._refreshStripEntities();this._panel='expert';this.render()},800)}).catch(err=>{console.error('Pool Pilot update_strip_test failed',err);alert('Erreur Pool Pilot: '+(err?.message||err))})});const add=this.shadowRoot.querySelector('[data-add-product]');if(add)add.onclick=()=>{const root=this.shadowRoot,gv=n=>root.querySelector(`[name="${n}"]`)?.value||'',num=n=>{const v=parseFloat(String(gv(n)).replace(',','.'));return Number.isFinite(v)?v:null};const category=gv('product_type')||gv('category')||'other';const dose=num('normal_dose_amount')||0,du=gv('dose_unit')||gv('unit')||'g',vol=num('reference_volume_m3')||10,delta=num('ph_delta');const payload={id:gv('id')||((gv('name')||'produit').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')||undefined),name:gv('name')||'Produit',category:category||'other',dosage_quantity:dose,dosage_unit:du,volume_basis_m3:vol,effect_delta:delta,stock_quantity:num('stock')||0,stock_unit:gv('unit')||du,notes:JSON.stringify({brand:gv('brand'),form:gv('form'),unit_weight_g:num('unit_weight_g'),multifunction:gv('multifunction')==='true',dissolution:gv('dissolution'),stabilized:gv('stabilized')==='true',treatment_place:gv('treatment_place'),shock_dose_amount:num('shock_dose_amount'),initial_dose_amount:num('initial_dose_amount')})};const service=this._editingProduct?'update_product':'add_product';this._hass.callService('pool_pilot',service,payload).then(()=>{this._editingProduct=null;this._panel='poolhouse';this.render()}).catch(err=>{console.error('Pool Pilot '+service+' failed',err);alert('Erreur Pool Pilot: '+(err?.message||err))})}}
-  _restorePanelScroll(){const p=this.shadowRoot?.querySelector('.expert-scroll')||this.shadowRoot?.querySelector('.full-sheet');if(p&&this._panelScroll&&this._panel)p.scrollTop=this._panelScroll}
- _bindExpertScroll(){const p=this.shadowRoot?.querySelector('.expert-scroll')||this.shadowRoot?.querySelector('.full-sheet');if(!p)return;const save=()=>{this._panelScroll=p.scrollTop;try{sessionStorage.setItem(this._key('expert_scroll'),String(this._panelScroll||0))}catch(e){}};try{const saved=Number(sessionStorage.getItem(this._key('expert_scroll'))||0);if(saved&&this._panel==='expert')p.scrollTop=saved}catch(e){}p.addEventListener('scroll',save,{passive:true});p.addEventListener('touchmove',e=>e.stopPropagation(),{passive:true});p.addEventListener('wheel',e=>e.stopPropagation(),{passive:true});p.querySelectorAll('input,select,textarea').forEach(el=>{el.addEventListener('focus',save,{passive:true});el.addEventListener('input',save,{passive:true});el.addEventListener('change',save,{passive:true})})}
- _bindStripConversion(){const root=this.shadowRoot;if(!root)return;const ppmToF=(ppm)=>{const n=parseFloat(String(ppm||'').replace(',','.'));return Number.isFinite(n)?Math.round((n/10)*10)/10:''};const fToPpm=(f)=>{const n=parseFloat(String(f||'').replace(',','.'));return Number.isFinite(n)?Math.round((n*10)*10)/10:''};[['strip_alkalinity','strip_alkalinity_f'],['strip_calcium','strip_calcium_f']].forEach(([ppmName,fName])=>{const ppm=root.querySelector(`[name="${ppmName}"]`),ff=root.querySelector(`[name="${fName}"]`);if(!ppm||!ff)return;ppm.oninput=()=>{ff.value=ppmToF(ppm.value)};ff.oninput=()=>{ppm.value=fToPpm(ff.value)}})}
-styles(){return`ha-card.pool-card{position:relative;overflow:hidden;border-radius:0;background:#eef7fb;color:#14233b;font-family:var(--primary-font-family);box-shadow:none}.top{padding:18px 18px 8px}.title{text-align:center;font-weight:600;font-size:18px;margin-bottom:14px}.tabs{display:grid;grid-template-columns:1fr 1fr;background:#aeb8c7;border-radius:18px;overflow:hidden}.tab{border:0;padding:13px 8px;font-size:16px;color:white;background:transparent;display:flex;align-items:center;justify-content:center;gap:8px}.tab.active{background:#10182d}.weather{display:flex;align-items:center;gap:10px;margin:18px 4px 10px}.air-block{display:flex;align-items:center;gap:10px}.air-block span:first-child{font-size:24px;opacity:.9}.air-block strong{font-size:42px;line-height:1}.weather i{height:58px;width:1px;background:#9aaabd;margin-left:auto}.meteo-block{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:92px}.meteo-icons{display:flex;align-items:center;justify-content:center;gap:7px;color:#14233b}.meteo-icons ha-icon{--mdc-icon-size:22px}.meteo-icons .next{font-size:26px;line-height:18px}.uv{border:2px solid #14233b;border-radius:10px;padding:2px 8px;font-weight:600}.meteo-alerts{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;max-width:92px}.meteo-alert{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white}.meteo-alert ha-icon{--mdc-icon-size:14px}.meteo-alert.yellow{background:#f4d82f}.meteo-alert.orange{background:#f4a325}.meteo-alert.red{background:#cc2f2f}.analysis-equipment{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 18px 70px}.device-mini{display:grid;grid-template-columns:42px 1fr auto;align-items:center;gap:8px;background:white;border-radius:16px;padding:14px;min-height:55px}.device-mini ha-icon{--mdc-icon-size:36px;color:#111}.device-mini span{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mini-power{border:0;width:46px;height:46px;border-radius:50%;background:#e9eef7;color:#95a2b4;display:flex;align-items:center;justify-content:center}.mini-power.on{background:#16d26b;color:white}.empty-device{grid-column:1/-1;background:#10182d;color:white;font-weight:800;border-radius:16px;padding:20px;font-size:18px}.water-zone{position:relative;background:linear-gradient(160deg,#2ed5c7,#4a9bd8);color:white;padding-top:60px;min-height:460px;border-radius:55% 45% 0 0 / 10% 8% 0 0}.water-zone:before{content:'';position:absolute;left:-15%;right:-15%;top:-55px;height:120px;background:#2ed5c7;border-radius:50%;box-shadow:0 6px 0 rgba(94,88,184,.75);opacity:.96}.measure-card{position:relative;z-index:2;margin:-18px 18px 0;background:rgba(225,255,252,.86);border-radius:14px;padding:10px;display:grid;grid-template-columns:52px 1fr 46px;gap:10px;align-items:center;color:#14233b}.trophy{width:52px;height:52px;border-radius:8px;background:#ff4db4;color:white;display:flex;align-items:center;justify-content:center}.measure-card strong,.measure-card span{display:block}.measure-trigger.ok,.measure-card button.ok{background:#2bd3b7!important;color:#fff!important;transform:scale(.96);box-shadow:0 0 0 8px rgba(43,211,183,.25)!important}.measure-card button{border:0;background:#10182d;color:white;border-radius:12px;width:44px;height:44px}.water-main{text-align:center;margin-top:48px}.water-main span{display:block;font-size:28px;opacity:.85}.water-main strong{font-size:48px;line-height:1}.gauges{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:26px 18px 26px;color:white}.gauge{display:flex;flex-direction:column;align-items:center;gap:8px}.ph-svg,.speed-svg{width:135px;height:135px;overflow:visible}.ph-track{fill:none;stroke:rgba(255,255,255,.22);stroke-width:14;stroke-linecap:round}.ph-progress{fill:none;stroke:#11182d;stroke-width:14;stroke-linecap:round}.ph-dot{fill:white}.ph-svg text{fill:white;font-size:38px;font-weight:400}.speed-track{fill:none;stroke:rgba(255,255,255,.26);stroke-width:13;stroke-linecap:round}.ticks line{stroke:white;stroke-width:2;stroke-linecap:round}.speed-needle{stroke:#11182d;stroke-width:9;stroke-linecap:round}.hub{fill:#11182d}.gauge{display:grid;grid-template-rows:140px 26px 30px 48px;align-items:center;justify-items:center}.gauge svg{grid-row:1;width:140px;height:140px}.gauge-value{grid-row:2;text-align:center;font-size:18px;font-weight:900;line-height:26px;margin:0;min-height:26px}.gauge-value-placeholder{visibility:hidden}.gauge-label{grid-row:3;font-size:20px;line-height:30px;margin:0}.gauge .pill{grid-row:4;align-self:start}.pill{border-radius:999px;padding:8px 14px;min-width:118px;text-align:center;font-size:16px;background:white;color:#14233b;display:flex;justify-content:center;align-items:center;gap:6px}.pill.good{border:2px solid rgba(255,255,255,.9);background:rgba(255,255,255,.12);color:white}.pill.warn{background:white;color:#14233b}.pill.bad{background:#ff8b4d;color:white}.status-bang{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:2px solid currentColor;border-radius:50%;font-weight:900;line-height:1}.status-bang ha-icon{--mdc-icon-size:15px}.status-good{border-color:currentColor}.bottom-watch{width:100%;border:0;background:#ffd46a;color:#07101f;font-weight:800;font-size:18px;padding:16px;display:flex;align-items:center;justify-content:center;gap:10px}.bottom-watch ha-icon{--mdc-icon-size:26px}.bottom-alert{width:100%;border:0;display:flex;align-items:center;justify-content:center;gap:10px;background:#ff8b4d;color:white;padding:15px 12px;font-weight:800;font-size:17px}.bottom-correction{width:100%;border:0;display:flex;align-items:center;justify-content:center;gap:10px;background:#35c8c7;color:white;padding:15px 12px;font-weight:800;font-size:17px}.bottom-correction ha-icon{--mdc-icon-size:24px}.bottom-snoozed{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#12182a;color:white;padding:13px 12px;font-weight:800;font-size:15px;box-sizing:border-box}.bottom-snoozed button{border:0;background:transparent;color:white;text-decoration:underline;font-weight:800;margin-left:auto}.bottom-snoozed ha-icon{--mdc-icon-size:24px}.bottom-ok{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:white;color:#11182d;padding:13px 12px;font-weight:800;font-size:17px;box-sizing:border-box}.bottom-ok ha-icon{--mdc-icon-size:28px}.bottom-nav{display:grid;grid-template-columns:1fr 1fr 1fr;background:#302744;color:white;padding:14px 10px 20px;align-items:center}.bottom-nav button{background:transparent;border:0;color:white;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px}.bottom-nav ha-icon{--mdc-icon-size:34px}.bottom-nav .fin{width:58px;height:58px;border:2px solid white;border-radius:50%;margin:auto;justify-content:center}.control-panel{padding:8px 18px 24px;background:white;min-height:520px}.control-device{display:grid;grid-template-columns:54px 1fr auto;align-items:center;gap:12px;background:#f6f8fb;border-radius:16px;padding:18px 14px;margin-bottom:14px}.control-device>ha-icon{--mdc-icon-size:45px;color:#111}.control-device span{display:block;font-size:13px;color:#536176;margin-top:4px}.control-buttons{display:flex;gap:8px;align-items:center}.round{width:46px;height:46px;border-radius:50%;border:0;background:#edf1f7;color:#98a5b8;display:flex;align-items:center;justify-content:center;position:relative}.round.on{background:#16d26b;color:white}.round.auto .bolt{font-size:25px;font-weight:900}.round.auto small{position:absolute;right:10px;top:8px;font-weight:900}.wide{border:0;border-radius:999px;background:#10182d;color:white;padding:10px 12px;font-weight:800}.heat-controls{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.mode{border:0;border-radius:12px;background:#edf1f7;color:#536176;padding:10px 8px;font-weight:700}.mode.active{background:#10182d;color:white}.temp{grid-column:1/-1;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px;background:#f3f6fa;border-radius:14px;padding:6px}.temp button{border:0;border-radius:10px;background:white;color:#10182d;font-size:22px}.temp strong{text-align:center;font-size:22px}.modal-backdrop,.menu-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.25);z-index:20;display:flex;align-items:flex-end}.alert-sheet,.menu-sheet{position:relative;background:white;color:#14233b;border-radius:24px 24px 0 0;padding:24px 18px;max-height:92%;overflow:auto;width:100%}.alert-sheet h1{font-size:34px;margin:0 0 18px}.close{position:absolute;right:18px;top:18px;border:0;background:#eef1f6;border-radius:50%;width:42px;height:42px}.alert-head{background:#203b50;color:white;border-radius:8px;padding:18px;text-align:center;display:flex;flex-direction:column;gap:8px}.alert-head ha-icon{color:#ff3f65;margin:auto;--mdc-icon-size:52px}.steps{margin:22px 0;display:grid;gap:16px}.steps div{display:grid;grid-template-columns:46px 1fr;gap:14px;align-items:center}.steps b{background:#203b50;color:white;padding:15px 0;text-align:center}.steps span{background:white;border-radius:10px;padding:15px;box-shadow:0 3px 14px rgba(22,42,70,.18)}.alert-actions{display:grid;grid-template-columns:1fr 1fr;gap:18px}.alert-actions button{border:0;border-radius:999px;padding:14px;font-weight:800;background:#dddaf3;color:#203b50}.alert-actions .done{background:#32d8b9;color:white}.logo{text-align:center;font-size:30px;margin:8px 0 22px}.menu-sheet button:not(.close){width:100%;border:0;background:white;border-bottom:1px solid #d6dde8;padding:18px 0;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:center;text-align:left;font-size:20px;font-weight:800;color:#11182d}.menu-sheet ha-icon{--mdc-icon-size:36px;color:#111}.full-sheet{position:fixed;top:0;right:0;bottom:0;left:0;z-index:999;background:#f2f5f8;color:#14233b;overflow-y:auto;overflow-x:hidden;padding:18px;box-sizing:border-box;max-width:520px;margin:0 auto;-webkit-overflow-scrolling:touch;overscroll-behavior:none;touch-action:pan-y;contain:content}.expert-sheet{height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;overflow:hidden;padding:18px 0 0;display:flex;flex-direction:column;scrollbar-gutter:stable;transform:translate3d(0,0,0)}.expert-sheet .sheet-top{padding:0 18px;flex:0 0 auto}.expert-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 18px 26px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;transform:translate3d(0,0,0);will-change:scroll-position}.expert-sheet input{color:#000!important;-webkit-text-fill-color:#000!important}.expert-sheet input::placeholder{color:#999!important;-webkit-text-fill-color:#999!important}.sheet-top{display:grid;grid-template-columns:46px 1fr 46px;align-items:center;margin-bottom:20px}.sheet-top button{border:0;background:transparent;color:#11182d}.sheet-top h2{text-align:center;margin:0}.seg{display:grid;grid-template-columns:1fr 1fr;background:#d2d4d9;border-radius:8px;margin:0 35px 18px;overflow:hidden}.seg button{border:0;background:transparent;color:white;padding:10px;font-weight:800;font-size:18px}.seg .active{background:#64666a}.product-card{position:relative;background:white;border-radius:10px;padding:18px;margin-bottom:18px;box-shadow:0 4px 18px rgba(22,42,70,.18)}.product-card .tag{display:inline-block;background:#203b50;color:white;border-radius:999px;padding:4px 10px;margin-bottom:10px}.product-card strong,.product-card em{display:block;font-size:18px}.product-card em{font-style:normal;color:#536176;margin-top:4px}.stock{height:9px;background:#d9e1ef;border-radius:999px;margin:18px 44px 4px 0;overflow:hidden}.stock i{display:block;height:100%;background:#31d1b7;border-radius:999px}.stock-label{font-size:12px;color:#536176}.delete,.edit{position:absolute;right:14px;border:0;background:transparent;color:#1ca2ca}.delete{top:14px;background:#2a9dc2;color:white;border-radius:50%;width:28px;height:28px}.edit{bottom:14px}.add-product label{display:block;font-weight:700;margin:12px 0}.add-product input,.add-product select{width:100%;box-sizing:border-box;border:0;border-radius:18px;padding:14px;margin-top:6px;background:white;color:#14233b;border:1px solid #d9e1ef}.section-title{text-transform:uppercase;color:#a8b2c4;font-weight:700;font-size:13px;letter-spacing:.04em;margin:22px 0 8px}.help{color:#536176;font-size:13px;line-height:1.35}.switch-grid{display:grid;grid-template-columns:1fr 130px;gap:10px;align-items:center;background:#f7f8fa;margin:18px -18px;padding:14px 18px}.switch-grid select{margin:0;border-radius:12px}.empty{padding:24px;text-align:center;color:#536176}.raw-box{background:white;border-radius:12px;padding:10px;overflow:auto}.raw-box table{width:100%;border-collapse:separate;border-spacing:0 8px;font-family:monospace}.raw-box th{background:#aaa;padding:8px;text-align:left}.raw-box td{background:#fff;padding:8px;border-bottom:1px solid #e2e7ef}.strip-card{background:white;border-radius:16px;padding:14px;margin-bottom:18px}.strip-tabs{display:grid;grid-template-columns:1fr 1fr;background:#999;border-radius:8px;overflow:hidden;margin-bottom:14px}.strip-tabs.single{grid-template-columns:1fr}.strip-tabs button{border:0;background:transparent;color:white;font-weight:800;font-size:18px;padding:8px}.strip-tabs .active{background:#000}.analyseur_eau-strip{display:grid;gap:0}.strip-row{display:grid;grid-template-columns:44px minmax(100px,1.1fr) minmax(76px,.8fr) auto minmax(76px,.8fr) auto;gap:10px;align-items:center;border-bottom:1px solid #ddd;padding:9px 0}.strip-row ha-icon{--mdc-icon-size:34px;color:#111}.strip-row b{font-size:18px;color:#000}.strip-row input{width:100%;box-sizing:border-box;border:2px solid #111;background:#fff;color:#000;text-align:center;font-size:22px;padding:10px}.strip-row input.disabled{background:#e5e5e5;color:#000}.strip-row span{font-size:18px;font-weight:800;color:#000}.strip-form label{display:block;font-weight:700;margin:12px 0}.strip-form input{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:18px;padding:14px;margin-top:6px;background:white;color:#000;-webkit-text-fill-color:#000}.save-strip{width:100%;border:0;border-radius:16px;background:#07101f;color:white;font-weight:800;padding:16px;margin-top:12px}.strip-ranges-card{background:white;border-radius:16px;padding:14px;margin:0 0 18px;box-shadow:0 4px 18px rgba(22,42,70,.06)}.strip-last-date{font-size:13px;color:#536176;margin:0 0 10px}.strip-range-help{font-size:12px;color:#536176;margin-top:14px}.strip-range-row{margin:13px 0 16px}.strip-range-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}.strip-range-head strong{font-size:17px;color:#14233b}.strip-range-head span{font-size:14px;font-weight:800;color:#14233b;text-align:right}.strip-range-bar{position:relative;height:38px;border-radius:7px;background:var(--strip-bg);overflow:visible}.strip-range-bar .strip-ok{position:absolute;top:0;bottom:0;background:#49c6e6;opacity:.95}.strip-marker{position:absolute;top:-7px;transform:translateX(-50%);height:52px;min-width:52px;display:flex;align-items:center;justify-content:center;pointer-events:none}.strip-marker i{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#111;transform:translateX(-50%);z-index:1}.strip-marker b{position:relative;z-index:2;background:white;color:#000;border:2px solid #111;border-radius:999px;min-width:42px;height:42px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.18)}.strip-range-row.hardness{--strip-bg:#ff2510}.strip-range-row.alkalinity{--strip-bg:#ffb31a}.strip-range-row.stabilizer{--strip-bg:#f5f900}.strip-range-row.total-chlorine{--strip-bg:#68dc70}.strip-range-row.free-chlorine{--strip-bg:#7d82ef}.strip-range-row.ph{--strip-bg:#e889e8}.diag{background:white;border-radius:12px;padding:10px}.diag div{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #e2e7ef}.diag div:last-child{border-bottom:0}.diag span{font-weight:700}.air-block .trend-arrow{font-size:.42em;margin-left:8px;vertical-align:middle}.water-trend{font-size:.45em;vertical-align:middle;margin-left:8px;font-weight:700}
-.journal-sheet{background:#213d50;color:white;padding:0;max-width:520px}.journal-header{height:82px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:#213d50;position:sticky;top:0;z-index:2}.journal-header h2{font-size:32px;margin:0;font-weight:900}.journal-header button{background:none;border:0;color:white}.journal-header ha-icon{--mdc-icon-size:34px}.journal-scroll{position:relative;min-height:calc(100vh - 82px);padding:20px 18px 60px;overflow:auto}.journal-line{position:absolute;top:0;bottom:0;left:50%;width:3px;background:#c8d3dc;transform:translateX(-50%)}.journal-item{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:18px 0 36px;align-items:center}.journal-item.left .journal-card{grid-column:1}.journal-item.left .journal-date{grid-column:2;text-align:left}.journal-item.right .journal-date{grid-column:1;text-align:right}.journal-item.right .journal-card{grid-column:2}.journal-card{background:white;color:#000;border-radius:8px;min-height:62px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:900;overflow:hidden}.journal-card .journal-icon{align-self:stretch;width:54px;display:flex;align-items:center;justify-content:center;color:white;order:2}.journal-item.right .journal-card .journal-icon{order:0}.journal-card strong{flex:1;text-align:center;padding:8px}.journal-date{color:#b8c3cc;font-size:17px;line-height:1.2}.journal-dot{position:absolute;left:50%;top:50%;width:10px;height:10px;background:white;border-radius:50%;transform:translate(-50%,-50%);z-index:1}.journal-empty{color:#b8c3cc;text-align:center;margin-top:80px}.journal-form-sheet{background:white;color:#213d50;padding:28px 22px}.journal-form-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:34px}.journal-form-top button{background:none;border:0;color:#14233b;font-size:18px}.journal-form-top span{font-size:20px}.journal-form-sheet h2{font-size:40px;margin:0 0 30px;font-weight:900;color:#213d50}.journal-select-cat{width:100%;border:1px solid #d9e1ef;border-radius:24px;background:#f8fafc;padding:16px 18px;text-align:left;font-size:18px;font-weight:800;color:#213d50}.journal-form-sheet label{display:block;text-transform:uppercase;color:#aeb8c9;margin:54px 0 14px;font-weight:700}.journal-form-sheet textarea{width:100%;height:110px;border:1px solid #d9e1ef;border-radius:22px;background:#f8fafc;box-sizing:border-box;font-size:18px;padding:12px;color:#000}.journal-date-pill{margin-top:70px;border-radius:20px;background:white;box-shadow:0 6px 20px rgba(35,61,80,.18);padding:14px 18px;display:flex;justify-content:space-between;align-items:center}.journal-date-pill span{font-size:18px;color:#213d50}.journal-date-pill strong{font-size:18px}.journal-cats button{display:block;width:100%;border:0;border-bottom:1px solid #e5e7eb;background:white;text-align:left;font-size:22px;padding:16px 0;color:#000}.journal-item{border:0;background:transparent;color:inherit;width:100%;font-family:inherit;cursor:pointer}.journal-detail-backdrop{align-items:flex-end}.journal-detail-sheet{width:100%;max-width:520px;background:white;color:#111;border-radius:0;overflow:hidden}.journal-detail-top{min-height:240px;background:rgba(33,61,80,.92);display:flex;align-items:flex-end;padding:0 20px 28px;color:#cfd8df;font-size:18px}.journal-detail-head{background:var(--journal-detail-color,#64748b);color:white;display:flex;align-items:center;gap:20px;padding:22px 24px;font-size:30px;font-weight:900}.journal-detail-head ha-icon{--mdc-icon-size:38px}.journal-detail-body{padding:28px 22px 40px;font-size:22px;line-height:1.35}.journal-detail-body hr{border:0;border-top:1px solid #e5e7eb;margin:30px 0}.journal-detail-body button{display:block;width:100%;border:0;background:white;color:#1ea0cf;font-size:19px;padding:18px}.journal-detail-body button.danger{color:#ef5f67}.journal-form-sheet input{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:22px;background:#f8fafc;font-size:18px;padding:14px;color:#000}.water-main{position:relative}.water-alerts{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px}.water-alert-badge{width:36px;height:36px;border-radius:50%;background:white;color:#111;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.12)}.water-alert-badge ha-icon{--mdc-icon-size:24px}.temp-alert-settings input{width:90px;border:0;background:#555;color:white;border-radius:8px;padding:8px;text-align:center;font-size:16px}.temp-alert-settings .diag-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center}.expert-help{font-size:13px;color:#536176;line-height:1.35;margin-top:10px}.pool-alert-green_algae_risk ha-icon{color:#111}.pool-alert-water_cold ha-icon,.pool-alert-water_hot ha-icon{color:#111}.settings-sheet{background:#f2f5f8;color:#14233b}.settings-scroll{padding:0 0 36px}.settings-card{background:white;border-radius:16px;padding:12px 14px;margin:0 0 18px;box-shadow:0 4px 18px rgba(22,42,70,.06)}.settings-row{display:grid;grid-template-columns:1fr 96px 42px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #e8edf5}.settings-row:last-child{border-bottom:0}.settings-row label{font-size:16px;font-weight:800}.settings-row input{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:14px;padding:10px;text-align:center;font-size:18px;color:#000;background:white}.settings-row span{font-weight:800;color:#536176}.settings-actions{display:flex;gap:12px;margin-top:22px}.settings-actions button{flex:1;border:0;border-radius:22px;padding:14px;font-size:17px;font-weight:800;background:white;color:#14233b}.settings-actions button.primary{background:#16a9d8;color:white}.settings-help{font-size:13px;color:#536176;margin-top:14px;line-height:1.35}.alert-head-orange{background:#ff8a4a!important}.alert-head-orange ha-icon{color:white!important}.pool-alert-stock_low ha-icon,.pool-alert-analyseur_eau_battery_low ha-icon,.pool-alert-storm ha-icon{color:#111}.vigilance-sheet .vig-score{display:flex;justify-content:space-between;align-items:center;background:#fff3dd;color:#14233b;border-radius:18px;padding:16px 18px;margin:12px 0 18px}.vig-score span{font-weight:800}.vig-score strong{font-size:34px}.vig-summary{font-size:17px;line-height:1.35;color:#26364f}.vig-section{margin-top:20px}.vig-section h3{margin:0 0 10px;font-size:20px;color:#14233b}.vig-section p{margin:8px 0;font-size:16px;line-height:1.35}.vig-point{display:grid;grid-template-columns:36px 1fr 50px;gap:10px;align-items:center;background:#f6f8fb;border-radius:14px;padding:12px;margin:8px 0;color:#14233b}.vig-point ha-icon{--mdc-icon-size:28px;color:#f39a2d}.vig-point strong{display:block;font-size:16px}.vig-point span{display:block;font-size:14px;line-height:1.25;color:#536176}.vig-point em{display:inline-block;margin-top:4px;font-style:normal;font-weight:800}.vig-point b{text-align:right;color:#f39a2d}.vig-empty{background:#f6f8fb;border-radius:14px;padding:14px;color:#536176}@media(max-width:430px){.strip-range-head strong{font-size:15px}.strip-range-head span{font-size:13px}.strip-range-bar{height:34px}.strip-marker{height:48px;min-width:48px}.strip-marker b{min-width:38px;height:38px;font-size:14px}.strip-row{grid-template-columns:36px minmax(92px,1.1fr) minmax(64px,.8fr) auto minmax(64px,.8fr) auto;gap:6px}.strip-row b{font-size:16px}.strip-row input{font-size:18px;padding:8px}.strip-row span{font-size:15px}.analysis-equipment{grid-template-columns:1fr 1fr}.device-mini{grid-template-columns:40px 1fr 44px;padding:12px}.device-mini span{font-size:13px}.gauges{gap:5px}.ph-svg,.speed-svg{width:125px;height:125px}.pill{min-width:105px;font-size:14px}.control-device{grid-template-columns:44px 1fr auto}.heat-controls{grid-column:1/-1}.water-zone{min-height:455px}}`}
+class PoolPilotDashboardEditor extends HTMLElement {
+  _defaults() {
+    return {
+      title: "Piscine",
+      show_weather: true,
+      show_weather_alerts: true,
+      show_recommendations: true,
+      enable_filter_pump: true,
+      enable_heatpump: false,
+      enable_electrolyzer: false,
+      electrolyzer_mode: "simple",
+      enable_counter_current: false,
+      enable_pool_house: false,
+      enable_lighting: false,
+      enable_aux1: false,
+      enable_aux2: false,
+      disinfection_mode: "auto",
+      history_default_period: "24h",
+      ph_min: 6.8,
+      ph_max: 7.8,
+      chlorine_min: 0,
+      chlorine_max: 5,
+      orp_min: 400,
+      orp_max: 900,
+    };
+  }
+  _normalizeConfig(config) {
+    const c = { ...this._defaults(), ...(config || {}) };
+    delete c.theme;
+    return c;
+  }
+  _stable(o) {
+    try {
+      return JSON.stringify(o, Object.keys(o || {}).sort());
+    } catch (e) {
+      return JSON.stringify(o || {});
+    }
+  }
+  setConfig(config) {
+    this.config = this._normalizeConfig(config);
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    if (!this._rendered) this.render();
+    else this._updateForm();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    if (!this._rendered) this.render();
+    else this._updateForm(false);
+  }
+  _schema() {
+    const s = [
+      { name: "title", selector: { text: {} } },
+      { name: "water_temp_entity", selector: { entity: { domain: "sensor" } } },
+      { name: "air_temp_entity", selector: { entity: { domain: "sensor" } } },
+      { name: "uv_entity", selector: { entity: { domain: "sensor" } } },
+      { name: "ph_entity", selector: { entity: { domain: "sensor" } } },
+      { name: "chlorine_entity", selector: { entity: { domain: "sensor" } } },
+      { name: "orp_entity", selector: { entity: { domain: "sensor" } } },
+      {
+        name: "disinfection_mode_entity",
+        selector: { entity: { domain: ["sensor", "select"] } },
+      },
+      {
+        name: "disinfection_mode",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "auto", label: "Automatique" },
+              { value: "chlorine", label: "Afficher le chlore libre" },
+              { value: "orp", label: "Afficher l’ORP / RedOx" },
+            ],
+          },
+        },
+      },
+      {
+        name: "last_measure_entity",
+        selector: { entity: { domain: ["sensor", "input_datetime"] } },
+      },
+      {
+        name: "trigger_measure_entity",
+        selector: { entity: { domain: ["button", "input_button", "switch"] } },
+      },
+      {
+        name: "chemistry_state_entity",
+        selector: { entity: { domain: "sensor" } },
+      },
+      {
+        name: "bathing_state_entity",
+        selector: { entity: { domain: "sensor" } },
+      },
+      { name: "actions_entity", selector: { entity: { domain: "sensor" } } },
+      {
+        name: "alert_entity",
+        selector: {
+          entity: { domain: ["sensor", "binary_sensor", "input_boolean"] },
+        },
+      },
+      {
+        name: "confirm_action_entity",
+        selector: { entity: { domain: ["button", "input_button"] } },
+      },
+      { name: "enable_filter_pump", selector: { boolean: {} } },
+    ];
+    if (this.config?.enable_filter_pump)
+      s.push(
+        {
+          name: "pump_entity",
+          selector: { entity: { domain: ["switch", "input_boolean", "fan"] } },
+        },
+        {
+          name: "pump_auto_entity",
+          selector: {
+            entity: {
+              domain: [
+                "automation",
+                "switch",
+                "input_boolean",
+                "button",
+                "input_button",
+              ],
+            },
+          },
+        },
+        {
+          name: "smart_filtration_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+        {
+          name: "filtration_duration_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+        {
+          name: "filtration_center_hour_entity",
+          selector: { entity: { domain: "number" } },
+        },
+        {
+          name: "filtration_placement_mode_entity",
+          selector: { entity: { domain: "select" } },
+        },
+        {
+          name: "auto_start_time_entity",
+          selector: { entity: { domain: "time" } },
+        },
+        {
+          name: "auto_end_time_entity",
+          selector: { entity: { domain: "time" } },
+        },
+      );
+    s.push({ name: "enable_heatpump", selector: { boolean: {} } });
+    if (this.config?.enable_heatpump)
+      s.push(
+        {
+          name: "heatpump_entity",
+          selector: { entity: { domain: ["climate", "switch"] } },
+        },
+        {
+          name: "heatpump_temp_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+      );
+    s.push({ name: "enable_electrolyzer", selector: { boolean: {} } });
+    if (this.config?.enable_electrolyzer) {
+      s.push(
+        {
+          name: "electrolyzer_mode",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: [
+                { value: "simple", label: "Simple — marche / arrêt" },
+                { value: "advanced", label: "Avancé — production et Boost" },
+              ],
+            },
+          },
+        },
+        {
+          name: "electrolyzer_entity",
+          selector: { entity: { domain: ["switch", "input_boolean"] } },
+        },
+      );
+      if (this.config?.electrolyzer_mode === "advanced")
+        s.push(
+          {
+            name: "electrolyzer_output_entity",
+            selector: { entity: { domain: "number" } },
+          },
+          {
+            name: "electrolyzer_boost_entity",
+            selector: {
+              entity: { domain: ["switch", "input_boolean", "button"] },
+            },
+          },
+          {
+            name: "electrolyzer_status_entity",
+            selector: { entity: { domain: ["sensor", "binary_sensor"] } },
+          },
+        );
+    }
+    s.push({ name: "enable_counter_current", selector: { boolean: {} } });
+    if (this.config?.enable_counter_current)
+      s.push({
+        name: "counter_current_entity",
+        selector: { entity: { domain: ["switch", "input_boolean"] } },
+      });
+    s.push({ name: "enable_lighting", selector: { boolean: {} } });
+    if (this.config?.enable_lighting)
+      s.push({
+        name: "lighting_entity",
+        selector: { entity: { domain: ["light", "switch", "input_boolean"] } },
+      });
+    s.push({ name: "enable_aux1", selector: { boolean: {} } });
+    if (this.config?.enable_aux1)
+      s.push(
+        { name: "aux1_label", selector: { text: {} } },
+        {
+          name: "aux1_entity",
+          selector: {
+            entity: { domain: ["switch", "input_boolean", "button"] },
+          },
+        },
+      );
+    s.push({ name: "enable_aux2", selector: { boolean: {} } });
+    if (this.config?.enable_aux2)
+      s.push(
+        { name: "aux2_label", selector: { text: {} } },
+        {
+          name: "aux2_entity",
+          selector: {
+            entity: { domain: ["switch", "input_boolean", "button"] },
+          },
+        },
+      );
+    s.push({ name: "enable_pool_house", selector: { boolean: {} } });
+    if (this.config?.enable_pool_house)
+      s.push(
+        {
+          name: "pool_house_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+        { name: "product_entities", selector: { text: { multiline: true } } },
+      );
+    s.push({ name: "show_weather", selector: { boolean: {} } });
+    if (this.config?.show_weather)
+      s.push(
+        { name: "weather_entity", selector: { entity: { domain: "weather" } } },
+        {
+          name: "weather_alert_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+        {
+          name: "weather_condition_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+        {
+          name: "weather_next_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+        {
+          name: "forecast_temp_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+      );
+    s.push(
+      { name: "show_weather_alerts", selector: { boolean: {} } },
+      { name: "show_recommendations", selector: { boolean: {} } },
+      { name: "ph_min", selector: { number: { min: 0, max: 14, step: 0.1 } } },
+      { name: "ph_max", selector: { number: { min: 0, max: 14, step: 0.1 } } },
+      {
+        name: "chlorine_min",
+        selector: { number: { min: 0, max: 10, step: 0.1 } },
+      },
+      {
+        name: "chlorine_max",
+        selector: { number: { min: 0, max: 10, step: 0.1 } },
+      },
+    );
+    return s;
+  }
+  _labels() {
+    return {
+      title: "Titre",
+      water_temp_entity: "Température eau",
+      air_temp_entity: "Température air",
+      uv_entity: "Indice UV",
+      ph_entity: "pH",
+      chlorine_entity: "Chlore libre",
+      orp_entity: "ORP / RedOx",
+      disinfection_mode_entity: "Configuration désinfection Pool Pilot",
+      disinfection_mode: "Mesure affichée sur la jauge",
+      last_measure_entity: "Dernière mesure",
+      trigger_measure_entity: "Bouton mesure",
+      chemistry_state_entity: "État chimie",
+      bathing_state_entity: "État baignade",
+      actions_entity: "Actions recommandées",
+      alert_entity: "Alerte",
+      confirm_action_entity: "Bouton action terminée",
+      enable_filter_pump: "Afficher filtration",
+      pump_entity: "Commande pompe",
+      pump_auto_entity: "Automatisation filtration",
+      smart_filtration_entity: "Capteur filtration intelligente",
+      filtration_duration_entity: "Durée filtration",
+      filtration_center_hour_entity: "Heure centrale filtration",
+      filtration_placement_mode_entity: "Placement filtration automatique",
+      auto_start_time_entity: "Heure de début minimale",
+      auto_end_time_entity: "Heure de fin maximale",
+      enable_heatpump: "Afficher pompe à chaleur",
+      heatpump_entity: "Pompe à chaleur",
+      heatpump_temp_entity: "Température cible PAC",
+      enable_electrolyzer: "Afficher électrolyseur",
+      electrolyzer_mode: "Type d’électrolyseur",
+      electrolyzer_entity: "Commande électrolyseur",
+      electrolyzer_output_entity: "Pourcentage de production",
+      electrolyzer_boost_entity: "Commande Boost",
+      electrolyzer_status_entity: "État électrolyseur",
+      enable_counter_current: "Afficher nage à contre-courant",
+      counter_current_entity: "Nage à contre-courant",
+      enable_lighting: "Afficher l’éclairage",
+      lighting_entity: "Entité éclairage",
+      enable_aux1: "Afficher auxiliaire 1",
+      aux1_label: "Nom auxiliaire 1",
+      aux1_entity: "Entité auxiliaire 1",
+      enable_aux2: "Afficher auxiliaire 2",
+      aux2_label: "Nom auxiliaire 2",
+      aux2_entity: "Entité auxiliaire 2",
+      enable_pool_house: "Afficher Pool House",
+      pool_house_entity: "Capteur Pool House",
+      product_entities: "Entités produits supplémentaires",
+      show_weather: "Afficher météo",
+      weather_entity: "Entité météo",
+      weather_alert_entity: "Alerte météo département",
+      weather_condition_entity: "Condition météo",
+      weather_next_entity: "Météo prochaine période",
+      forecast_temp_entity: "Température prévue",
+      show_weather_alerts: "Afficher alertes météo",
+      show_recommendations: "Afficher alertes/recommandations",
+      ph_min: "pH minimum jauge",
+      ph_max: "pH maximum jauge",
+      chlorine_min: "Chlore minimum jauge",
+      chlorine_max: "Chlore maximum jauge",
+    };
+  }
+  _updateForm(updateData = true) {
+    const form = this.shadowRoot?.querySelector("ha-form");
+    if (!form) return;
+    form.hass = this._hass;
+    if (updateData) form.data = { ...(this.config || {}) };
+  }
+  render() {
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    this._rendered = true;
+    this.shadowRoot.innerHTML =
+      '<style>.editor{padding:12px 0}.hint{color:var(--secondary-text-color);font-size:13px;margin:0 0 12px}</style><div class="editor"><p class="hint">Coche les équipements présents : seuls les champs utiles apparaissent. La carte suit automatiquement le thème clair/sombre de Home Assistant.</p><ha-form></ha-form></div>';
+    const form = this.shadowRoot.querySelector("ha-form");
+    form.hass = this._hass;
+    form.data = { ...(this.config || {}) };
+    form.schema = this._schema();
+    form.computeLabel = (s) => this._labels()[s.name] || s.name;
+    form.addEventListener("value-changed", (ev) => {
+      const prev = this.config || {};
+      const next = this._normalizeConfig(ev.detail.value || {});
+      const prevKey = this._stable(prev);
+      const nextKey = this._stable(next);
+      if (nextKey === prevKey || nextKey === this._lastEmittedKey) return;
+      this.config = next;
+      this._lastEmittedKey = nextKey;
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: { ...this.config } },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      const keys = [
+        "enable_filter_pump",
+        "enable_heatpump",
+        "enable_electrolyzer",
+        "electrolyzer_mode",
+        "enable_counter_current",
+        "enable_pool_house",
+        "enable_lighting",
+        "enable_aux1",
+        "enable_aux2",
+        "show_weather",
+      ];
+      if (keys.some((k) => prev[k] !== this.config[k])) {
+        clearTimeout(this._schemaTimer);
+        this._schemaTimer = setTimeout(() => this.render(), 80);
+      }
+    });
+  }
 }
-class PoolPilotDashboardEditor extends HTMLElement{
- _defaults(){return{title:'Piscine',show_weather:true,show_weather_alerts:true,show_recommendations:true,enable_filter_pump:true,enable_heatpump:false,enable_electrolyzer:false,electrolyzer_mode:'simple',enable_counter_current:false,enable_pool_house:false,enable_lighting:false,enable_aux1:false,enable_aux2:false,disinfection_mode:'auto',history_default_period:'24h',ph_min:6.8,ph_max:7.8,chlorine_min:0,chlorine_max:5,orp_min:400,orp_max:900}}
- _normalizeConfig(config){const c={...this._defaults(),...(config||{})};delete c.theme;return c}
- _stable(o){try{return JSON.stringify(o,Object.keys(o||{}).sort())}catch(e){return JSON.stringify(o||{})}}
- setConfig(config){this.config=this._normalizeConfig(config);if(!this.shadowRoot)this.attachShadow({mode:'open'});if(!this._rendered)this.render();else this._updateForm()}
- set hass(hass){this._hass=hass;if(!this.shadowRoot)this.attachShadow({mode:'open'});if(!this._rendered)this.render();else this._updateForm(false)}
- _schema(){const s=[{name:'title',selector:{text:{}}},{name:'water_temp_entity',selector:{entity:{domain:'sensor'}}},{name:'air_temp_entity',selector:{entity:{domain:'sensor'}}},{name:'uv_entity',selector:{entity:{domain:'sensor'}}},{name:'ph_entity',selector:{entity:{domain:'sensor'}}},{name:'chlorine_entity',selector:{entity:{domain:'sensor'}}},{name:'orp_entity',selector:{entity:{domain:'sensor'}}},{name:'disinfection_mode_entity',selector:{entity:{domain:['sensor','select']}}},{name:'disinfection_mode',selector:{select:{mode:'dropdown',options:[{value:'auto',label:'Automatique'},{value:'chlorine',label:'Afficher le chlore libre'},{value:'orp',label:'Afficher l’ORP / RedOx'}]}}},{name:'last_measure_entity',selector:{entity:{domain:['sensor','input_datetime']}}},{name:'trigger_measure_entity',selector:{entity:{domain:['button','input_button','switch']}}},{name:'chemistry_state_entity',selector:{entity:{domain:'sensor'}}},{name:'bathing_state_entity',selector:{entity:{domain:'sensor'}}},{name:'actions_entity',selector:{entity:{domain:'sensor'}}},{name:'alert_entity',selector:{entity:{domain:['sensor','binary_sensor','input_boolean']}}},{name:'confirm_action_entity',selector:{entity:{domain:['button','input_button']}}},{name:'enable_filter_pump',selector:{boolean:{}}}];if(this.config?.enable_filter_pump)s.push({name:'pump_entity',selector:{entity:{domain:['switch','input_boolean','fan']}}},{name:'pump_auto_entity',selector:{entity:{domain:['automation','switch','input_boolean','button','input_button']}}},{name:'smart_filtration_entity',selector:{entity:{domain:'sensor'}}},{name:'filtration_duration_entity',selector:{entity:{domain:'sensor'}}},{name:'filtration_center_hour_entity',selector:{entity:{domain:'sensor'}}});s.push({name:'enable_heatpump',selector:{boolean:{}}});if(this.config?.enable_heatpump)s.push({name:'heatpump_entity',selector:{entity:{domain:['climate','switch']}}},{name:'heatpump_temp_entity',selector:{entity:{domain:'sensor'}}});s.push({name:'enable_electrolyzer',selector:{boolean:{}}});if(this.config?.enable_electrolyzer){s.push({name:'electrolyzer_mode',selector:{select:{mode:'dropdown',options:[{value:'simple',label:'Simple — marche / arrêt'},{value:'advanced',label:'Avancé — production et Boost'}]}}},{name:'electrolyzer_entity',selector:{entity:{domain:['switch','input_boolean']}}});if(this.config?.electrolyzer_mode==='advanced')s.push({name:'electrolyzer_output_entity',selector:{entity:{domain:'number'}}},{name:'electrolyzer_boost_entity',selector:{entity:{domain:['switch','input_boolean','button']}}},{name:'electrolyzer_status_entity',selector:{entity:{domain:['sensor','binary_sensor']}}})}s.push({name:'enable_counter_current',selector:{boolean:{}}});if(this.config?.enable_counter_current)s.push({name:'counter_current_entity',selector:{entity:{domain:['switch','input_boolean']}}});s.push({name:'enable_lighting',selector:{boolean:{}}});if(this.config?.enable_lighting)s.push({name:'lighting_entity',selector:{entity:{domain:['light','switch','input_boolean']}}});s.push({name:'enable_aux1',selector:{boolean:{}}});if(this.config?.enable_aux1)s.push({name:'aux1_label',selector:{text:{}}},{name:'aux1_entity',selector:{entity:{domain:['switch','input_boolean','button']}}});s.push({name:'enable_aux2',selector:{boolean:{}}});if(this.config?.enable_aux2)s.push({name:'aux2_label',selector:{text:{}}},{name:'aux2_entity',selector:{entity:{domain:['switch','input_boolean','button']}}});s.push({name:'enable_pool_house',selector:{boolean:{}}});if(this.config?.enable_pool_house)s.push({name:'pool_house_entity',selector:{entity:{domain:'sensor'}}},{name:'product_entities',selector:{text:{multiline:true}}});s.push({name:'show_weather',selector:{boolean:{}}});if(this.config?.show_weather)s.push({name:'weather_entity',selector:{entity:{domain:'weather'}}},{name:'weather_alert_entity',selector:{entity:{domain:'sensor'}}},{name:'weather_condition_entity',selector:{entity:{domain:'sensor'}}},{name:'weather_next_entity',selector:{entity:{domain:'sensor'}}},{name:'forecast_temp_entity',selector:{entity:{domain:'sensor'}}});s.push({name:'show_weather_alerts',selector:{boolean:{}}},{name:'show_recommendations',selector:{boolean:{}}},{name:'ph_min',selector:{number:{min:0,max:14,step:.1}}},{name:'ph_max',selector:{number:{min:0,max:14,step:.1}}},{name:'chlorine_min',selector:{number:{min:0,max:10,step:.1}}},{name:'chlorine_max',selector:{number:{min:0,max:10,step:.1}}});return s}
- _labels(){return{title:'Titre',water_temp_entity:'Température eau',air_temp_entity:'Température air',uv_entity:'Indice UV',ph_entity:'pH',chlorine_entity:'Chlore libre',orp_entity:'ORP / RedOx',disinfection_mode_entity:'Configuration désinfection Pool Pilot',disinfection_mode:'Mesure affichée sur la jauge',last_measure_entity:'Dernière mesure',trigger_measure_entity:'Bouton mesure',chemistry_state_entity:'État chimie',bathing_state_entity:'État baignade',actions_entity:'Actions recommandées',alert_entity:'Alerte',confirm_action_entity:'Bouton action terminée',enable_filter_pump:'Afficher filtration',pump_entity:'Commande pompe',pump_auto_entity:'Automatisation filtration',smart_filtration_entity:'Capteur filtration intelligente',filtration_duration_entity:'Durée filtration',filtration_center_hour_entity:'Heure centrale filtration',enable_heatpump:'Afficher pompe à chaleur',heatpump_entity:'Pompe à chaleur',heatpump_temp_entity:'Température cible PAC',enable_electrolyzer:'Afficher électrolyseur',electrolyzer_mode:'Type d’électrolyseur',electrolyzer_entity:'Commande électrolyseur',electrolyzer_output_entity:'Pourcentage de production',electrolyzer_boost_entity:'Commande Boost',electrolyzer_status_entity:'État électrolyseur',enable_counter_current:'Afficher nage à contre-courant',counter_current_entity:'Nage à contre-courant',enable_lighting:'Afficher l’éclairage',lighting_entity:'Entité éclairage',enable_aux1:'Afficher auxiliaire 1',aux1_label:'Nom auxiliaire 1',aux1_entity:'Entité auxiliaire 1',enable_aux2:'Afficher auxiliaire 2',aux2_label:'Nom auxiliaire 2',aux2_entity:'Entité auxiliaire 2',enable_pool_house:'Afficher Pool House',pool_house_entity:'Capteur Pool House',product_entities:'Entités produits supplémentaires',show_weather:'Afficher météo',weather_entity:'Entité météo',weather_alert_entity:'Alerte météo département',weather_condition_entity:'Condition météo',weather_next_entity:'Météo prochaine période',forecast_temp_entity:'Température prévue',show_weather_alerts:'Afficher alertes météo',show_recommendations:'Afficher alertes/recommandations',ph_min:'pH minimum jauge',ph_max:'pH maximum jauge',chlorine_min:'Chlore minimum jauge',chlorine_max:'Chlore maximum jauge'}}
- _updateForm(updateData=true){const form=this.shadowRoot?.querySelector('ha-form');if(!form)return;form.hass=this._hass;if(updateData)form.data={...(this.config||{})}}
- render(){if(!this.shadowRoot)this.attachShadow({mode:'open'});this._rendered=true;this.shadowRoot.innerHTML='<style>.editor{padding:12px 0}.hint{color:var(--secondary-text-color);font-size:13px;margin:0 0 12px}</style><div class="editor"><p class="hint">Coche les équipements présents : seuls les champs utiles apparaissent. La carte suit automatiquement le thème clair/sombre de Home Assistant.</p><ha-form></ha-form></div>';const form=this.shadowRoot.querySelector('ha-form');form.hass=this._hass;form.data={...(this.config||{})};form.schema=this._schema();form.computeLabel=s=>this._labels()[s.name]||s.name;form.addEventListener('value-changed',ev=>{const prev=this.config||{};const next=this._normalizeConfig(ev.detail.value||{});const prevKey=this._stable(prev);const nextKey=this._stable(next);if(nextKey===prevKey||nextKey===this._lastEmittedKey)return;this.config=next;this._lastEmittedKey=nextKey;this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:{...this.config}},bubbles:true,composed:true}));const keys=['enable_filter_pump','enable_heatpump','enable_electrolyzer','electrolyzer_mode','enable_counter_current','enable_pool_house','enable_lighting','enable_aux1','enable_aux2','show_weather'];if(keys.some(k=>prev[k]!==this.config[k])){clearTimeout(this._schemaTimer);this._schemaTimer=setTimeout(()=>this.render(),80)}})}
-}if(!customElements.get('pool-pilot-dashboard'))customElements.define('pool-pilot-dashboard',PoolPilotDashboardCard);if(!customElements.get('pool-pilot-dashboard-card'))customElements.define('pool-pilot-dashboard-card',class extends PoolPilotDashboardCard{});if(!customElements.get('pool-pilot-dashboard-editor'))customElements.define('pool-pilot-dashboard-editor',PoolPilotDashboardEditor);window.customCards=window.customCards||[];if(!window.customCards.some(c=>c.type==='pool-pilot-dashboard-card'))window.customCards.push({type:'pool-pilot-dashboard-card',name:'Pool Pilot Dashboard',description:'Dashboard piscine avec Analyse, Contrôle, Historique, Pool House et filtration intelligente.',preview:true});console.info('%cPOOL-PILOT-DASHBOARD-CARD v1.2.0-beta.1','color:#2ed5c7;font-weight:bold');
+if (!customElements.get("pool-pilot-dashboard"))
+  customElements.define("pool-pilot-dashboard", PoolPilotDashboardCard);
+if (!customElements.get("pool-pilot-dashboard-card"))
+  customElements.define(
+    "pool-pilot-dashboard-card",
+    class extends PoolPilotDashboardCard {},
+  );
+if (!customElements.get("pool-pilot-dashboard-editor"))
+  customElements.define(
+    "pool-pilot-dashboard-editor",
+    PoolPilotDashboardEditor,
+  );
+window.customCards = window.customCards || [];
+if (!window.customCards.some((c) => c.type === "pool-pilot-dashboard-card"))
+  window.customCards.push({
+    type: "pool-pilot-dashboard-card",
+    name: "Pool Pilot Dashboard",
+    description:
+      "Dashboard piscine avec Analyse, Contrôle, Historique, Pool House et filtration intelligente.",
+    preview: true,
+  });
+console.info(
+  "%cPOOL-PILOT-DASHBOARD-CARD v1.2.1-beta",
+  "color:#2ed5c7;font-weight:bold",
+);

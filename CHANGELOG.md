@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.1-beta
+
+### Added
+- Added controls for the automatic-filtration placement mode directly in the card settings.
+- Added editable minimum start and maximum end times for window-based automatic filtration.
+- Added automatic discovery and optional explicit configuration of the new `select` and `time` entities.
+
+### Fixed
+- The card now displays the central hour only in centered mode and the authorized time window only in window mode.
+- Corrected the editor selector for the central filtration hour to use the `number` domain.
+
 ## v1.2.0-beta.1
 
 ### Added

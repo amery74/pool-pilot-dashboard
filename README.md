@@ -8,6 +8,16 @@
 
 Elle regroupe dans une interface mobile : mesures, filtration, chauffage, alertes, conseils, carnet d’entretien, test bandelette, Pool House, balance de Taylor et paramètres avancés.
 
+### Programmation de la filtration depuis la carte
+
+À partir de **v1.2.1-beta**, le panneau **Paramètres → Filtration** permet de piloter directement :
+
+- le placement de la filtration automatique (centré ou plage horaire) ;
+- l’heure centrale lorsque le mode centré est utilisé ;
+- l’heure de début minimale et l’heure de fin maximale lorsque le mode plage horaire est utilisé.
+
+Les contrôles utilisent les entités `select`, `number` et `time` exposées par Pool Pilot **v1.2.1-beta**.
+
 ## Aperçu
 
 <p align="center">
