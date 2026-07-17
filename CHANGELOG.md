@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.2.0-beta.1
+
+### Added
+- New History panel with 24-hour, 7-day and 30-day views.
+- Temperature, pH and ORP/chlorine charts based on Home Assistant Recorder history.
+- Simple or advanced electrolyzer display.
+- Advanced electrolyzer production percentage and optional Boost control.
+- Optional Pool Pilot disinfection-mode entity for automatic ORP/chlorine presentation.
+
+### Fixed
+- Registered both `pool-pilot-dashboard` and `pool-pilot-dashboard-card` custom element names.
+- Preserved the page and container scroll positions during Home Assistant state refreshes.
+- Improved compatibility with YAML and storage dashboards.
+
+
 ## v1.1.1
 
 ### Fixed
