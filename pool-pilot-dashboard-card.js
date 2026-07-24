@@ -17,6 +17,7 @@ class PoolPilotDashboardCard extends HTMLElement {
       enable_lighting: false,
       enable_aux1: false,
       enable_aux2: false,
+      enable_cover: false,
       disinfection_mode: "auto",
     };
   }
@@ -35,6 +36,7 @@ class PoolPilotDashboardCard extends HTMLElement {
       enable_lighting: false,
       enable_aux1: false,
       enable_aux2: false,
+      enable_cover: false,
       disinfection_mode: "auto",
       history_default_period: "24h",
       ph_min: 6.8,
@@ -609,45 +611,25 @@ class PoolPilotDashboardCard extends HTMLElement {
   _chlorineGauge() {
     const mode = this._resolvedDisinfectionMode(),
       hasChl = this._num(this.config.chlorine_entity) !== null,
-      hasOrp = this._num(this.config.orp_entity) !== null,
       isChl = mode === "chlorine" || (mode === "auto" && hasChl),
-      raw = isChl
-        ? this._num(this.config.chlorine_entity)
-        : this._num(this.config.orp_entity),
-      min =
-        Number(isChl ? this.config.chlorine_min : this.config.orp_min) ||
-        (isChl ? 0 : 400),
-      max =
-        Number(isChl ? this.config.chlorine_max : this.config.orp_max) ||
-        (isChl ? 5 : 900),
-      pct =
-        raw === null
-          ? 0.5
-          : Math.max(0, Math.min(1, (raw - min) / (max - min))),
-      angle = -112 + pct * 224,
+      raw = isChl ? this._num(this.config.chlorine_entity) : this._num(this.config.orp_entity),
+      min = Number(isChl ? this.config.chlorine_min : this.config.orp_min) || (isChl ? 0 : 400),
+      max = Number(isChl ? this.config.chlorine_max : this.config.orp_max) || (isChl ? 5 : 900),
+      pct = raw === null ? 0.5 : Math.max(0, Math.min(1, (raw - min) / (max - min))),
+      end = -135 + pct * 270,
+      p = this._polar(70, 70, 54, end),
       status = this._chlStatus(),
-      label = isChl ? "Chlore" : "ORP",
-      valueLabel =
-        raw === null
-          ? "—"
-          : isChl
-            ? `${raw.toFixed(1).replace(".", ",")} ppm`
-            : `${Math.round(raw)} mV`;
-    let ticks = "";
-    for (let i = 0; i < 13; i++) {
-      const a = -112 + i * (224 / 12),
-        p1 = this._polar(70, 70, 50, a),
-        p2 = this._polar(70, 70, i % 3 === 0 ? 37 : 43, a);
-      ticks += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`;
-    }
-    return `<div class="gauge chlorine-gauge"><svg viewBox="0 0 140 140" class="speed-svg"><path class="speed-track" d="${this._arc(70, 70, 50, -112, 112)}"/><g class="ticks">${ticks}</g><line class="speed-needle" x1="70" y1="70" x2="70" y2="28" style="transform:rotate(${angle}deg);transform-origin:70px 70px"/><circle class="hub" cx="70" cy="70" r="5"/></svg><div class="gauge-value">${valueLabel}</div><div class="gauge-label">${label}</div><div class="pill ${this._qualityClass(status)}">${this._statusIcon(status)}${this._labelState(status)}</div></div>`;
+      label = isChl ? "Chlore libre" : "ORP",
+      display = raw === null ? "—" : isChl ? raw.toFixed(1).replace(".", ",") : Math.round(raw),
+      unit = isChl ? "ppm" : "mV";
+    return `<div class="gauge ph-gauge chlorine-gauge"><svg viewBox="0 0 140 140" class="ph-svg"><path class="ph-track" d="${this._arc(70,70,54,-135,135)}"/><path class="ph-progress" d="${this._arc(70,70,54,-135,end)}"/><circle class="ph-dot" cx="${p.x}" cy="${p.y}" r="10"/><text x="70" y="73" text-anchor="middle">${display}</text><text x="70" y="91" text-anchor="middle" class="gauge-unit">${unit}</text></svg><div class="gauge-value gauge-value-placeholder" aria-hidden="true">&nbsp;</div><div class="gauge-label">${label}</div><div class="pill ${this._qualityClass(status)}">${this._statusIcon(status)}${this._labelState(status)}</div></div>`;
   }
   _smallDevice(label, icon, entity) {
     return `<div class="device-mini ${!entity ? "disabled" : ""}"><ha-icon icon="${icon}"></ha-icon><span>${label}</span>${entity ? `<button class="mini-power ${this._isOn(entity) ? "on" : ""}" data-action="toggle" data-entity="${entity}"><ha-icon icon="mdi:power"></ha-icon></button>` : `<button class="mini-power"><ha-icon icon="mdi:plus"></ha-icon></button>`}</div>`;
   }
   _controlPanel() {
     const c = this.config || {};
-    return `<div class="control-panel">${c.enable_filter_pump ? this._filterControl() : ""}${c.enable_heatpump ? this._heatpumpControl() : ""}${c.enable_electrolyzer ? this._electrolyzerControl() : ""}${c.enable_counter_current ? this._controlDevice("Nage à contre-courant", "mdi:waves-arrow-right", c.counter_current_entity, "Commande auxiliaire") : ""}${c.enable_lighting ? this._controlDevice("Éclairage", "mdi:lightbulb-outline", c.lighting_entity, "Commande éclairage") : ""}${c.enable_aux1 ? this._controlDevice(c.aux1_label || "Auxiliaire 1", "mdi:electric-switch", c.aux1_entity, "Contact auxiliaire") : ""}${c.enable_aux2 ? this._controlDevice(c.aux2_label || "Auxiliaire 2", "mdi:electric-switch", c.aux2_entity, "Contact auxiliaire") : ""}</div>`;
+    return `<div class="control-panel">${c.enable_filter_pump ? this._filterControl() : ""}${c.enable_heatpump ? this._heatpumpControl() : ""}${c.enable_electrolyzer ? this._electrolyzerControl() : ""}${c.enable_counter_current ? this._controlDevice("Nage à contre-courant", "mdi:waves-arrow-right", c.counter_current_entity, "Commande auxiliaire") : ""}${c.enable_lighting ? this._controlDevice("Éclairage", "mdi:lightbulb-outline", c.lighting_entity, "Commande éclairage") : ""}${c.enable_aux1 ? this._controlDevice(c.aux1_label || "Auxiliaire 1", "mdi:electric-switch", c.aux1_entity, "Contact auxiliaire") : ""}${c.enable_aux2 ? this._controlDevice(c.aux2_label || "Auxiliaire 2", "mdi:electric-switch", c.aux2_entity, "Contact auxiliaire") : ""}${c.enable_cover && c.cover_entity ? this._coverControl() : ""}</div>`;
   }
   _electrolyzerControl() {
     const c = this.config || {},
@@ -659,11 +641,16 @@ class PoolPilotDashboardCard extends HTMLElement {
         "—",
       raw = this._num(c.electrolyzer_output_entity),
       output = raw === null ? 0 : Math.max(0, Math.min(100, raw));
-    return `<div class="control-device electrolyzer ${advanced ? "advanced" : ""}"><ha-icon icon="mdi:creation-outline"></ha-icon><div><strong>Électrolyseur</strong><span>${advanced ? `${status} · ${Math.round(output)} %` : status}</span></div><div class="control-buttons"><button class="round ${on ? "on" : ""}" data-action="toggle" data-entity="${c.electrolyzer_entity || ""}"><ha-icon icon="mdi:power"></ha-icon></button>${advanced && c.electrolyzer_boost_entity ? `<button class="round boost ${this._isOn(c.electrolyzer_boost_entity) ? "on" : ""}" title="Boost" data-action="toggle" data-entity="${c.electrolyzer_boost_entity}"><ha-icon icon="mdi:rocket-launch-outline"></ha-icon></button>` : ""}</div>${advanced && c.electrolyzer_output_entity ? `<div class="electro-output"><label>Production <b>${Math.round(output)} %</b></label><input type="range" min="0" max="100" step="1" value="${Math.round(output)}" data-electro-output="${c.electrolyzer_output_entity}"></div>` : ""}</div>`;
+    return `<div class="control-device electrolyzer ${advanced ? "advanced" : ""}"><ha-icon icon="mdi:creation-outline"></ha-icon><div><strong>Électrolyseur</strong><span>${advanced ? `${status} · ${Math.round(output)} %` : status}</span></div><div class="control-buttons"><button class="round ${on ? "on" : ""}" data-action="toggle" data-entity="${c.electrolyzer_entity || ""}"><ha-icon icon="mdi:power"></ha-icon></button>${c.electrolyzer_boost_entity ? `<button class="round boost ${this._isOn(c.electrolyzer_boost_entity) ? "on" : ""}" title="Activer le Boost" data-action="toggle" data-entity="${c.electrolyzer_boost_entity}"><ha-icon icon="mdi:rocket-launch-outline"></ha-icon></button>` : ""}</div>${advanced && c.electrolyzer_output_entity ? `<div class="electro-output"><label>Production <b>${Math.round(output)} %</b></label><input type="range" min="0" max="100" step="1" value="${Math.round(output)}" data-electro-output="${c.electrolyzer_output_entity}"></div>` : ""}</div>`;
+  }
+  _coverControl() {
+    const e=this.config.cover_entity, st=this._state(e), pos=st?.attributes?.current_position;
+    return `<div class="control-device cover-control"><ha-icon icon="mdi:garage-variant"></ha-icon><div><strong>Volet</strong><span>${st?.state || "—"}${pos !== undefined ? ` · ${pos} %` : ""}</span></div><div class="cover-buttons"><button data-cover-action="open" data-entity="${e}"><ha-icon icon="mdi:arrow-up"></ha-icon></button><button data-cover-action="stop" data-entity="${e}"><ha-icon icon="mdi:stop"></ha-icon></button><button data-cover-action="close" data-entity="${e}"><ha-icon icon="mdi:arrow-down"></ha-icon></button></div></div>`;
   }
   _filterControl() {
     const c = this.config || {};
-    return `<div class="control-device"><ha-icon icon="mdi:pool"></ha-icon><div><strong>Filtration</strong><span>${c.filtration_duration_entity ? "Durée recommandée : " + this._format(c.filtration_duration_entity) : "Pompe de filtration"}</span></div><div class="control-buttons two"><button title="Marche/arrêt manuel" class="round ${this._isOn(c.pump_entity) ? "on" : ""}" data-action="toggle" data-entity="${c.pump_entity || ""}"><ha-icon icon="mdi:power"></ha-icon></button><button title="Activer/désactiver filtration automatique Pool Pilot" class="round auto ${this._autoActive() ? "on" : ""}" data-action="auto_schedule" data-entity=""><span class="bolt">ϟ</span><small>A</small></button></div></div>`;
+    const ps=this._state(c.filtration_progress_entity), pa=ps?.attributes||{}, pct=Number(ps?.state ?? pa.filtration_progress_percent), done=pa.done_hours, target=pa.target_hours, remain=pa.remaining_hours;
+    return `<div class="control-device filtration-control"><ha-icon icon="mdi:pool"></ha-icon><div><strong>Filtration</strong><span>${c.filtration_duration_entity ? "Durée recommandée : " + this._format(c.filtration_duration_entity) : "Pompe de filtration"}</span>${Number.isFinite(pct) ? `<div class="filtration-progress"><i style="width:${Math.max(0,Math.min(100,pct))}%"></i></div><small>${done ?? "—"} h / ${target ?? "—"} h · ${Math.round(pct)} % · reste ${remain ?? "—"} h</small>` : ""}</div><div class="control-buttons two"><button title="Marche/arrêt manuel" class="round ${this._isOn(c.pump_entity) ? "on" : ""}" data-action="toggle" data-entity="${c.pump_entity || ""}"><ha-icon icon="mdi:power"></ha-icon></button><button title="Activer/désactiver filtration automatique Pool Pilot" class="round auto ${this._autoActive() ? "on" : ""}" data-action="auto_schedule" data-entity=""><span class="bolt">ϟ</span><small>A</small></button></div></div>`;
   }
   _heatpumpControl() {
     const c = this.config || {},
@@ -1807,6 +1794,9 @@ class PoolPilotDashboardCard extends HTMLElement {
       )}</div>${this._historyLoading ? '<div class="history-loading"><ha-icon icon="mdi:loading"></ha-icon> Chargement…</div>' : this._historyError ? `<div class="history-error">${this._historyError}</div>` : defs.map((d) => this._historyChart(d)).join("")}</div></div>`;
   }
 
+  _maintenanceEntity() { return this.config.maintenance_entity || "switch.piscine_mode_maintenance"; }
+  _maintenanceActive() { return this._isOn(this._maintenanceEntity()); }
+  _maintenanceBanner() { return this._maintenanceActive() ? `<div class="maintenance-banner"><ha-icon icon="mdi:tools"></ha-icon><strong>Mode Maintenance actif</strong><span>Automatismes suspendus · commandes manuelles disponibles</span></div>` : ""; }
   _menuPanel() {
     return `<div class="menu-backdrop" data-close="1"><div class="menu-sheet"><button class="close" data-close="1"><ha-icon icon="mdi:close"></ha-icon></button><div class="logo">pool pilot</div><button data-panel="history"><ha-icon icon="mdi:chart-line"></ha-icon>Historique</button><button data-panel="journal"><ha-icon icon="mdi:timeline-clock-outline"></ha-icon>Carnet d’entretien</button><button data-panel="poolhouse"><ha-icon icon="mdi:home-outline"></ha-icon>Pool House</button><button data-panel="expert"><ha-icon icon="mdi:star-outline"></ha-icon>Mode Expert</button><button data-panel="taylor"><ha-icon icon="mdi:scale-balance"></ha-icon>Balance de Taylor</button><button data-panel="settings"><ha-icon icon="mdi:cog-outline"></ha-icon>Paramètres</button></div></div>`;
   }
@@ -2271,7 +2261,7 @@ class PoolPilotDashboardCard extends HTMLElement {
           )
         : "",
     ].join("");
-    this.shadowRoot.innerHTML = `<style>${this.styles()}.taylor-hero{text-align:center;padding:18px}.taylor-hero ha-icon{--mdc-icon-size:72px;color:#0f1b33}.taylor-hero h3{margin:8px 0;font-size:24px}.taylor-hero p{color:#526174;font-size:14px}.taylor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 22px}.taylor-tile{background:#fff;border-radius:14px;padding:18px;text-align:center;box-shadow:0 8px 24px rgba(15,27,51,.06)}.taylor-tile strong{display:block;font-size:26px;color:#0f1b33}.taylor-tile span{display:block;margin-top:8px;font-size:13px;color:#526174}.taylor-result{background:#fff;border-radius:16px;padding:18px;box-shadow:0 8px 24px rgba(15,27,51,.06)}.taylor-result strong{display:block;font-size:20px}.taylor-result span{display:block;margin:8px 0;color:#526174}.taylor-result.good{border-left:6px solid #2bd3b7}.taylor-result.warn{border-left:6px solid #ffb84d}.taylor-result.bad{border-left:6px solid #ff6b6b}.taylor-result.neutral{border-left:6px solid #9aa7b8}.taylor-note{color:#526174;font-size:13px;line-height:1.45;margin:18px 4px 40px}.notify-settings label{display:block;margin:10px 0}.notify-settings input[type=text]{width:100%;box-sizing:border-box;border:1px solid #d9e1ec;border-radius:12px;padding:12px;margin-top:8px}.notify-settings .check{display:flex;gap:10px;align-items:center}.notify-settings .secondary{border:0;border-radius:14px;padding:12px 16px;background:#eef3f8;color:#14233b;font-weight:700;margin-top:8px}.notify-label{font-weight:700;margin:14px 0 8px}.electrolyzer.advanced{grid-template-columns:auto 1fr auto}.electro-output{grid-column:2/4;width:100%;margin-top:10px}.electro-output label{display:flex;justify-content:space-between;font-size:13px;color:#526174}.electro-output input{width:100%;accent-color:#13bfa8}.history-sheet{background:#f4f7fb}.history-scroll{overflow:auto;padding:18px 18px 80px;height:calc(100% - 64px);box-sizing:border-box}.history-periods{display:flex;gap:8px;margin-bottom:16px;position:sticky;top:0;background:#f4f7fb;padding:4px 0 10px;z-index:2}.history-periods button{border:0;border-radius:999px;padding:9px 14px;background:#e5ebf3;font-weight:800}.history-periods button.active{background:#13bfa8;color:#fff}.history-card{background:#fff;border-radius:16px;padding:15px;margin-bottom:14px;box-shadow:0 8px 24px rgba(15,27,51,.06)}.history-head{display:flex;justify-content:space-between;align-items:center}.history-head strong{display:block;font-size:17px}.history-head span{display:block;color:#718096;font-size:12px}.history-head b{font-size:21px}.history-card svg{width:100%;height:210px;margin-top:12px;overflow:visible}.history-card svg line{stroke:#d8e0ea;stroke-width:1}.history-card svg polyline{fill:none;stroke:#13bfa8;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.history-scale{display:flex;justify-content:space-between;color:#718096;font-size:11px}.history-loading,.history-error,.history-empty{padding:28px;text-align:center;background:#fff;border-radius:14px;color:#526174}.history-loading ha-icon{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.notify-list{background:#f7f9fc;border-radius:14px;padding:8px;margin:8px 0 14px}.notify-settings label{display:block;margin:10px 0}.notify-settings input[type=text],.notify-settings input[type=number]{width:100%;box-sizing:border-box;border:1px solid #d9e1ec;border-radius:12px;padding:12px;margin-top:8px}.notify-settings .check{display:flex;gap:10px;align-items:center}.notify-settings .secondary{border:0;border-radius:14px;padding:12px 16px;background:#eef3f8;color:#14233b;font-weight:700;margin-top:8px}.settings-select-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,210px);gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #e8edf5}.settings-select-row label{font-size:16px;font-weight:800}.settings-select-row select{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:14px;padding:10px;font-size:15px;color:#000;background:white}.placement-settings[hidden],[data-placement-centered][hidden],[data-placement-window][hidden]{display:none!important}.settings-time-row input{font-variant-numeric:tabular-nums}@media(max-width:430px){.settings-select-row{grid-template-columns:1fr}.settings-select-row select{font-size:16px}}</style><ha-card class="pool-card ${c.theme || "analyseur_eau"}"><div class="top"><div class="title">${c.title || "Piscine"}</div><div class="tabs"><button class="tab ${this._tab === "analysis" ? "active" : ""}" data-tab="analysis"><ha-icon icon="mdi:water-outline"></ha-icon>Analyse</button><button class="tab ${this._tab === "control" ? "active" : ""}" data-tab="control"><ha-icon icon="mdi:toggle-switch-outline"></ha-icon>Contrôle</button></div>${this._weatherBlock(air, uv)}</div>${this._tab === "analysis" ? `<div class="analysis-equipment">${devices || '<div class="empty-device">Connecter un nouvel équipement</div>'}</div><div class="water-zone"><div class="measure-card"><div class="trophy"><ha-icon icon="mdi:wifi"></ha-icon></div><div><strong>Dernière Mesure</strong><span>${last}</span></div><button class="measure-trigger ${this._measureFlash ? "ok" : ""}" data-action="measure" data-entity="${c.trigger_measure_entity || ""}"><ha-icon icon="mdi:radar"></ha-icon></button></div><div class="water-main"><span>eau</span><strong>${water}${this._waterTrend() ? ` <span class="water-trend">${this._waterTrend()}</span>` : ""}</strong>${this._poolAlertBadges()}</div><div class="gauges">${this._phGauge(ph)}${this._chlorineGauge()}</div></div>` : this._controlPanel()}${banner.cls === "bottom-snoozed" ? `<div class="bottom-snoozed"><ha-icon icon="${banner.icon}"></ha-icon><span>${banner.text}</span><button data-cancel-snooze="1">Annuler</button></div>` : banner.open ? `<button class="${banner.cls}" data-panel="${banner.panel || "alert"}"><ha-icon icon="${banner.icon}"></ha-icon>${banner.text}</button>` : `<div class="${banner.cls}"><ha-icon icon="${banner.icon}"></ha-icon><span>${banner.text}</span></div>`}<div class="bottom-nav"><button data-panel="menu"><ha-icon icon="mdi:waves"></ha-icon><span>Menu</span></button><button class="fin"><ha-icon icon="mdi:shark-fin-outline"></ha-icon></button><button data-panel="poolhouse"><ha-icon icon="mdi:bucket-outline"></ha-icon><span>Pool House</span></button></div>${this._panel === "alert" ? this._alertPanel() : ""}${this._panel === "vigilance" ? this._vigilancePanel() : ""}${this._panel === "menu" ? this._menuPanel() : ""}${this._panel === "history" ? this._historyPanel() : ""}${this._panel === "poolhouse" ? this._poolHousePanel() : ""}${this._panel === "addProduct" ? this._addProductPanel() : ""}${this._panel === "expert" ? this._expertPanel() : ""}${this._panel === "maintenance" ? this._journalPanel() : ""}${this._panel === "journal" ? this._journalPanel() : ""}${this._panel === "journalAdd" ? this._journalAddPanel() : ""}${this._panel === "journalCats" ? this._journalCategoriesPanel() : ""}${this._panel === "settings" ? this._settingsPanel() : ""}${this._panel === "taylor" ? this._taylorBalancePanel() : ""}${this._panel === "journalDetail" ? this._journalDetailPanel() : ""}${this._panel === "journalEdit" ? this._journalEditPanel() : ""}</ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${this.styles()}.maintenance-banner{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;background:#ffb84d;color:#14233b;padding:12px 16px}.maintenance-banner ha-icon{grid-row:1/3}.maintenance-banner span{font-size:12px}.maintenance-toggle.active{background:#ffb84d!important}.cover-buttons{display:flex;gap:6px}.cover-buttons button{border:0;border-radius:50%;width:38px;height:38px}.filtration-progress{height:8px;background:#dfe7ef;border-radius:999px;overflow:hidden;margin-top:7px}.filtration-progress i{display:block;height:100%;background:#13bfa8}.filtration-control small{display:block;color:#64748b;margin-top:4px}.gauge-unit{font-size:11px;font-weight:700}.pool-logo{pointer-events:none}.taylor-hero{text-align:center;padding:18px}.taylor-hero ha-icon{--mdc-icon-size:72px;color:#0f1b33}.taylor-hero h3{margin:8px 0;font-size:24px}.taylor-hero p{color:#526174;font-size:14px}.taylor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 22px}.taylor-tile{background:#fff;border-radius:14px;padding:18px;text-align:center;box-shadow:0 8px 24px rgba(15,27,51,.06)}.taylor-tile strong{display:block;font-size:26px;color:#0f1b33}.taylor-tile span{display:block;margin-top:8px;font-size:13px;color:#526174}.taylor-result{background:#fff;border-radius:16px;padding:18px;box-shadow:0 8px 24px rgba(15,27,51,.06)}.taylor-result strong{display:block;font-size:20px}.taylor-result span{display:block;margin:8px 0;color:#526174}.taylor-result.good{border-left:6px solid #2bd3b7}.taylor-result.warn{border-left:6px solid #ffb84d}.taylor-result.bad{border-left:6px solid #ff6b6b}.taylor-result.neutral{border-left:6px solid #9aa7b8}.taylor-note{color:#526174;font-size:13px;line-height:1.45;margin:18px 4px 40px}.notify-settings label{display:block;margin:10px 0}.notify-settings input[type=text]{width:100%;box-sizing:border-box;border:1px solid #d9e1ec;border-radius:12px;padding:12px;margin-top:8px}.notify-settings .check{display:flex;gap:10px;align-items:center}.notify-settings .secondary{border:0;border-radius:14px;padding:12px 16px;background:#eef3f8;color:#14233b;font-weight:700;margin-top:8px}.notify-label{font-weight:700;margin:14px 0 8px}.electrolyzer.advanced{grid-template-columns:auto 1fr auto}.electro-output{grid-column:2/4;width:100%;margin-top:10px}.electro-output label{display:flex;justify-content:space-between;font-size:13px;color:#526174}.electro-output input{width:100%;accent-color:#13bfa8}.history-sheet{background:#f4f7fb}.history-scroll{overflow:auto;padding:18px 18px 80px;height:calc(100% - 64px);box-sizing:border-box}.history-periods{display:flex;gap:8px;margin-bottom:16px;position:sticky;top:0;background:#f4f7fb;padding:4px 0 10px;z-index:2}.history-periods button{border:0;border-radius:999px;padding:9px 14px;background:#e5ebf3;font-weight:800}.history-periods button.active{background:#13bfa8;color:#fff}.history-card{background:#fff;border-radius:16px;padding:15px;margin-bottom:14px;box-shadow:0 8px 24px rgba(15,27,51,.06)}.history-head{display:flex;justify-content:space-between;align-items:center}.history-head strong{display:block;font-size:17px}.history-head span{display:block;color:#718096;font-size:12px}.history-head b{font-size:21px}.history-card svg{width:100%;height:210px;margin-top:12px;overflow:visible}.history-card svg line{stroke:#d8e0ea;stroke-width:1}.history-card svg polyline{fill:none;stroke:#13bfa8;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.history-scale{display:flex;justify-content:space-between;color:#718096;font-size:11px}.history-loading,.history-error,.history-empty{padding:28px;text-align:center;background:#fff;border-radius:14px;color:#526174}.history-loading ha-icon{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.notify-list{background:#f7f9fc;border-radius:14px;padding:8px;margin:8px 0 14px}.notify-settings label{display:block;margin:10px 0}.notify-settings input[type=text],.notify-settings input[type=number]{width:100%;box-sizing:border-box;border:1px solid #d9e1ec;border-radius:12px;padding:12px;margin-top:8px}.notify-settings .check{display:flex;gap:10px;align-items:center}.notify-settings .secondary{border:0;border-radius:14px;padding:12px 16px;background:#eef3f8;color:#14233b;font-weight:700;margin-top:8px}.settings-select-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,210px);gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #e8edf5}.settings-select-row label{font-size:16px;font-weight:800}.settings-select-row select{width:100%;box-sizing:border-box;border:1px solid #d9e1ef;border-radius:14px;padding:10px;font-size:15px;color:#000;background:white}.placement-settings[hidden],[data-placement-centered][hidden],[data-placement-window][hidden]{display:none!important}.settings-time-row input{font-variant-numeric:tabular-nums}@media(max-width:430px){.settings-select-row{grid-template-columns:1fr}.settings-select-row select{font-size:16px}}</style><ha-card class="pool-card ${c.theme || "analyseur_eau"}">${this._maintenanceBanner()}<div class="top"><div class="title">${c.title || "Piscine"}</div><div class="tabs"><button class="tab ${this._tab === "analysis" ? "active" : ""}" data-tab="analysis"><ha-icon icon="mdi:water-outline"></ha-icon>Analyse</button><button class="tab ${this._tab === "control" ? "active" : ""}" data-tab="control"><ha-icon icon="mdi:toggle-switch-outline"></ha-icon>Contrôle</button></div>${this._weatherBlock(air, uv)}</div>${this._tab === "analysis" ? `<div class="analysis-equipment">${devices || '<div class="empty-device">Connecter un nouvel équipement</div>'}</div><div class="water-zone"><div class="measure-card"><div class="trophy"><ha-icon icon="mdi:wifi"></ha-icon></div><div><strong>Dernière mesure de l’eau</strong><span>${last}</span></div><button class="measure-trigger ${this._measureFlash ? "ok" : ""}" data-action="measure" data-entity="${c.trigger_measure_entity || ""}"><ha-icon icon="mdi:radar"></ha-icon></button></div><div class="water-main"><span>eau</span><strong>${water}${this._waterTrend() ? ` <span class="water-trend">${this._waterTrend()}</span>` : ""}</strong>${this._poolAlertBadges()}</div><div class="gauges">${this._phGauge(ph)}${this._chlorineGauge()}</div></div>` : this._controlPanel()}${banner.cls === "bottom-snoozed" ? `<div class="bottom-snoozed"><ha-icon icon="${banner.icon}"></ha-icon><span>${banner.text}</span><button data-cancel-snooze="1">Annuler</button></div>` : banner.open ? `<button class="${banner.cls}" data-panel="${banner.panel || "alert"}"><ha-icon icon="${banner.icon}"></ha-icon>${banner.text}</button>` : `<div class="${banner.cls}"><ha-icon icon="${banner.icon}"></ha-icon><span>${banner.text}</span></div>`}<div class="bottom-nav"><button data-panel="menu"><ha-icon icon="mdi:waves"></ha-icon><span>Menu</span></button><button class="fin pool-logo" tabindex="-1" aria-hidden="true"><ha-icon icon="mdi:pool"></ha-icon></button><button data-panel="poolhouse"><ha-icon icon="mdi:bucket-outline"></ha-icon><span>Pool House</span></button></div>${this._panel === "alert" ? this._alertPanel() : ""}${this._panel === "vigilance" ? this._vigilancePanel() : ""}${this._panel === "menu" ? this._menuPanel() : ""}${this._panel === "history" ? this._historyPanel() : ""}${this._panel === "poolhouse" ? this._poolHousePanel() : ""}${this._panel === "addProduct" ? this._addProductPanel() : ""}${this._panel === "expert" ? this._expertPanel() : ""}${this._panel === "maintenance" ? this._journalPanel() : ""}${this._panel === "journal" ? this._journalPanel() : ""}${this._panel === "journalAdd" ? this._journalAddPanel() : ""}${this._panel === "journalCats" ? this._journalCategoriesPanel() : ""}${this._panel === "settings" ? this._settingsPanel() : ""}${this._panel === "taylor" ? this._taylorBalancePanel() : ""}${this._panel === "journalDetail" ? this._journalDetailPanel() : ""}${this._panel === "journalEdit" ? this._journalEditPanel() : ""}</ha-card>`;
     this._bind();
   }
 
@@ -2618,6 +2608,18 @@ class PoolPilotDashboardCard extends HTMLElement {
             });
         }),
     );
+    this.shadowRoot.querySelector("[data-maintenance-toggle]")?.addEventListener("click", async () => {
+      const e=this._maintenanceEntity(), active=this._maintenanceActive();
+      if (active && !confirm("Quitter le mode Maintenance et autoriser de nouveau les automatismes Pool Pilot ?")) return;
+      await this._hass.callService("switch", active ? "turn_off" : "turn_on", {entity_id:e});
+    });
+    this.shadowRoot.querySelectorAll("[data-cover-action]").forEach(btn => btn.addEventListener("click", async () => {
+      const action=btn.dataset.coverAction, entity=btn.dataset.entity;
+      if ((action === "open" && this.config.cover_confirm_open) || (action === "close" && this.config.cover_confirm_close)) {
+        if (!confirm(`${action === "open" ? "Ouvrir" : "Fermer"} le volet de la piscine ?`)) return;
+      }
+      await this._hass.callService("cover", `${action}_cover`, {entity_id:entity});
+    }));
     this.shadowRoot.querySelectorAll("[data-action]").forEach(
       (b) =>
         (b.onclick = (e) => {
@@ -2958,6 +2960,7 @@ class PoolPilotDashboardEditor extends HTMLElement {
       enable_lighting: false,
       enable_aux1: false,
       enable_aux2: false,
+      enable_cover: false,
       disinfection_mode: "auto",
       history_default_period: "24h",
       ph_min: 6.8,
@@ -3076,6 +3079,10 @@ class PoolPilotDashboardEditor extends HTMLElement {
           selector: { entity: { domain: "sensor" } },
         },
         {
+          name: "filtration_progress_entity",
+          selector: { entity: { domain: "sensor" } },
+        },
+        {
           name: "filtration_center_hour_entity",
           selector: { entity: { domain: "number" } },
         },
@@ -3124,17 +3131,15 @@ class PoolPilotDashboardEditor extends HTMLElement {
           selector: { entity: { domain: ["switch", "input_boolean"] } },
         },
       );
+      s.push({
+        name: "electrolyzer_boost_entity",
+        selector: { entity: { domain: ["switch", "input_boolean", "button"] } },
+      });
       if (this.config?.electrolyzer_mode === "advanced")
         s.push(
           {
             name: "electrolyzer_output_entity",
             selector: { entity: { domain: "number" } },
-          },
-          {
-            name: "electrolyzer_boost_entity",
-            selector: {
-              entity: { domain: ["switch", "input_boolean", "button"] },
-            },
           },
           {
             name: "electrolyzer_status_entity",
@@ -3176,7 +3181,15 @@ class PoolPilotDashboardEditor extends HTMLElement {
           },
         },
       );
-    s.push({ name: "enable_pool_house", selector: { boolean: {} } });
+    s.push({ name: "enable_cover", selector: { boolean: {} } });
+    if (this.config?.enable_cover)
+      s.push(
+        { name: "cover_entity", selector: { entity: { domain: "cover" } } },
+        { name: "cover_confirm_open", selector: { boolean: {} } },
+        { name: "cover_confirm_close", selector: { boolean: {} } },
+      );
+    s.push({ name: "maintenance_entity", selector: { entity: { domain: "switch" } } });
+        s.push({ name: "enable_pool_house", selector: { boolean: {} } });
     if (this.config?.enable_pool_house)
       s.push(
         {
@@ -3245,6 +3258,7 @@ class PoolPilotDashboardEditor extends HTMLElement {
       pump_auto_entity: "Automatisation filtration",
       smart_filtration_entity: "Capteur filtration intelligente",
       filtration_duration_entity: "Durée filtration",
+      filtration_progress_entity: "Progression filtration",
       filtration_center_hour_entity: "Heure centrale filtration",
       filtration_placement_mode_entity: "Placement filtration automatique",
       auto_start_time_entity: "Heure de début minimale",
@@ -3258,6 +3272,11 @@ class PoolPilotDashboardEditor extends HTMLElement {
       electrolyzer_output_entity: "Pourcentage de production",
       electrolyzer_boost_entity: "Commande Boost",
       electrolyzer_status_entity: "État électrolyseur",
+      enable_cover: "Afficher le volet",
+      cover_entity: "Entité volet",
+      cover_confirm_open: "Confirmation avant ouverture",
+      cover_confirm_close: "Confirmation avant fermeture",
+      maintenance_entity: "Mode Maintenance Pool Pilot",
       enable_counter_current: "Afficher nage à contre-courant",
       counter_current_entity: "Nage à contre-courant",
       enable_lighting: "Afficher l’éclairage",
@@ -3357,6 +3376,6 @@ if (!window.customCards.some((c) => c.type === "pool-pilot-dashboard-card"))
     preview: true,
   });
 console.info(
-  "%cPOOL-PILOT-DASHBOARD-CARD v1.2.1-beta",
+  "%cPOOL-PILOT-DASHBOARD-CARD v1.2.2-beta",
   "color:#2ed5c7;font-weight:bold",
 );
