@@ -1,3 +1,8 @@
+## 1.2.3-beta
+
+- Correctifs ciblés de la carte : Maintenance, jauge désinfection, progression de filtration et volet.
+- Aucun changement de la structure générale de l’interface.
+
 # Changelog
 
 ## 1.2.2-beta
