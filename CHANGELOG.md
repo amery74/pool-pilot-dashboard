@@ -1,95 +1,70 @@
-## 1.2.3-beta
-
-- Correctifs ciblés de la carte : Maintenance, jauge désinfection, progression de filtration et volet.
-- Aucun changement de la structure générale de l’interface.
-
 # Changelog
 
-## 1.2.2-beta
-- Mode Maintenance avec suspension des automatismes et maintien des mesures.
-- Commande facultative du volet (ouvrir, arrêter, fermer, état et position).
-- Progression quotidienne de filtration : réalisé, prévu, pourcentage et temps restant.
-- Jauge ORP/chlore harmonisée avec la jauge pH.
-- Boost électrolyseur utilisable en mode simple ou avancé.
-- Enregistrement automatique des alertes et récapitulatifs dans le carnet.
-- Amélioration du bouton de mesure, du logo central et de la stabilité du défilement.
+All notable changes to Pool Pilot Dashboard are documented in this file.
 
-# Changelog
+The project follows semantic versioning where possible.
 
-## v1.2.1-beta
+## [Unreleased]
 
-### Added
-- Added controls for the automatic-filtration placement mode directly in the card settings.
-- Added editable minimum start and maximum end times for window-based automatic filtration.
-- Added automatic discovery and optional explicit configuration of the new `select` and `time` entities.
+### Planned
 
-### Fixed
-- The card now displays the central hour only in centered mode and the authorized time window only in window mode.
-- Corrected the editor selector for the central filtration hour to use the `number` domain.
+- Continue mobile compatibility and community testing.
 
-## v1.2.0-beta.1
+## [1.2.3] - 2026-07-26
 
 ### Added
-- New History panel with 24-hour, 7-day and 30-day views.
-- Temperature, pH and ORP/chlorine charts based on Home Assistant Recorder history.
-- Simple or advanced electrolyzer display.
-- Advanced electrolyzer production percentage and optional Boost control.
-- Optional Pool Pilot disinfection-mode entity for automatic ORP/chlorine presentation.
+
+- Maintenance Mode control in Expert Mode.
+- Pool-cover controls using a standard Home Assistant `cover` entity.
+- Daily filtration progress directly in the Expert Mode “Cycle du jour” row.
+
+### Changed
+
+- Reduced chlorine/ORP value size to prevent mobile overflow.
+- Improved treatment popup to display the actual recommendation and dosage.
+- Pool-cover configuration is handled exclusively by the card.
 
 ### Fixed
-- Registered both `pool-pilot-dashboard` and `pool-pilot-dashboard-card` custom element names.
-- Preserved the page and container scroll positions during Home Assistant state refreshes.
-- Improved compatibility with YAML and storage dashboards.
 
+- Missing recommendation details when no separate alert item was present.
+- Filtration progress placement and display.
+- Mobile chlorine/ORP gauge overflow.
 
-## v1.1.1
-
-### Fixed
-- pH and chlorine/ORP gauges now remain perfectly aligned.
-- The numeric ppm/mV value no longer shifts the right gauge downward.
-- Improved HACS resource troubleshooting documentation.
-- Confirmed the HACS package filename and root-content configuration.
-
-
-## v1.1.0-beta.1
+## [1.2.2-beta]
 
 ### Added
-- Numeric chlorine or ORP value below the gauge.
-- Card-level selector for chlorine versus ORP display.
-- Optional lighting, AUX1 and AUX2 controls.
+
+- Initial Maintenance Mode, filtration progress and updated disinfection gauge.
+
+## [1.2.1-beta]
+
+### Added
+
+- Card controls for automatic-filtration placement and authorized time window.
+
+## [1.2.0-beta.1]
+
+### Added
+
+- History views for 24 hours, 7 days and 30 days.
+- Simple and advanced electrolyzer display with optional Boost.
+- ORP/free-chlorine presentation based on integration configuration.
+
+## [1.1.1]
 
 ### Fixed
-- pH value formatting.
-- Alert banner no longer appears without an actionable recommendation.
-- “Water correction in progress” is hidden when no recommendation remains.
 
+- Gauge alignment and HACS resource documentation.
 
-## v1.0.1
+## [1.0.1]
 
 ### Fixed
-- Fixed Dashboard render crash when the main temperature value is empty, unavailable or non-numeric.
-- Fixed `TypeError: this._fmt is not a function` reported on Firefox/Windows and Firefox/Linux.
-- Prevented the Lovelace card editor from refreshing continuously due to this rendering error.
 
-## v1.0.0
+- Rendering with unavailable or non-numeric temperature values.
+- Firefox compatibility issue affecting the card renderer.
 
-### Stable release
-- First stable release of the Pool Pilot Dashboard Lovelace card.
-- Polished mobile-first dashboard for Pool Pilot.
-- Compatible with Pool Pilot v1.0.0.
+## [1.0.0]
 
-### Features
-- Main pool status dashboard.
-- Water temperature, pH, chlorine and alert display.
-- Pool House product management UI.
-- Strip test entry and display.
-- Notification settings UI.
-- Smart filtration controls.
+### Added
 
-### Stability
-- Fixed unsupported `twice_daily` weather forecast calls.
-- Removed forced refresh of legacy strip-test entities.
-- Improved compatibility with Home Assistant 2026.6+.
-
-## v0.34.37
-- Fixed strip test refresh warnings by removing refresh calls for legacy `sensor.piscine_*_bandelette` entities.
+- First stable mobile-first Pool Pilot Dashboard release.

@@ -3415,6 +3415,6 @@ if (!window.customCards.some((c) => c.type === "pool-pilot-dashboard-card"))
     preview: true,
   });
 console.info(
-  "%cPOOL-PILOT-DASHBOARD-CARD v1.2.3-beta",
+  "%cPOOL-PILOT-DASHBOARD-CARD v1.2.3",
   "color:#2ed5c7;font-weight:bold",
 );

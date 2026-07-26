@@ -1,175 +1,230 @@
 <p align="center">
-  <img src="docs/screenshots/dashboard-main.jpg" alt="Pool Pilot Dashboard" width="360">
+  <img src="docs/screenshots/dashboard-home-overview.jpg" alt="Pool Pilot Dashboard" width="340">
 </p>
 
-# Pool Pilot Dashboard
-
-**Pool Pilot Dashboard** est une carte Lovelace complète pour piloter et visualiser une piscine avec Home Assistant et l’intégration Pool Pilot.
-
-Elle regroupe dans une interface mobile : mesures, filtration, chauffage, alertes, conseils, carnet d’entretien, test bandelette, Pool House, balance de Taylor et paramètres avancés.
-
-### Programmation de la filtration depuis la carte
-
-À partir de **v1.2.1-beta**, le panneau **Paramètres → Filtration** permet de piloter directement :
-
-- le placement de la filtration automatique (centré ou plage horaire) ;
-- l’heure centrale lorsque le mode centré est utilisé ;
-- l’heure de début minimale et l’heure de fin maximale lorsque le mode plage horaire est utilisé.
-
-Les contrôles utilisent les entités `select`, `number` et `time` exposées par Pool Pilot **v1.2.1-beta**.
-
-## Aperçu
+<h1 align="center">Pool Pilot Dashboard</h1>
 
 <p align="center">
-  <img src="docs/screenshots/dashboard-main.jpg" alt="Vue principale" width="300">
-  <img src="docs/screenshots/alert-dashboard.jpg" alt="Alerte en cours" width="300">
+  Carte Lovelace complète et mobile pour l’intégration Pool Pilot dans Home Assistant.
 </p>
+
+<p align="center">
+  <a href="https://github.com/amery74/pool-pilot-dashboard/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/amery74/pool-pilot-dashboard"></a>
+  <a href="LICENSE"><img alt="Licence" src="https://img.shields.io/github/license/amery74/pool-pilot-dashboard"></a>
+  <a href="https://github.com/amery74/pool-pilot-dashboard/actions/workflows/validate.yml"><img alt="HACS validation" src="https://img.shields.io/github/actions/workflow/status/amery74/pool-pilot-dashboard/validate.yml?label=HACS"></a>
+  <a href="https://github.com/amery74/pool-pilot-dashboard/issues"><img alt="Issues" src="https://img.shields.io/github/issues/amery74/pool-pilot-dashboard"></a>
+</p>
+
+## Sommaire
+
+- [Présentation](#présentation)
+- [Fonctionnalités](#fonctionnalités)
+- [Aperçu](#aperçu)
+- [Installation](#installation-avec-hacs)
+- [Ajout et configuration](#ajout-de-la-carte)
+- [Configuration du volet](#configuration-du-volet)
+- [Dépannage](#dépannage)
+- [Contribution et support](#contribution-et-support)
+
+## Présentation
+
+**Pool Pilot Dashboard** regroupe dans une seule carte Home Assistant les mesures de l’eau, les commandes des équipements, les alertes, l’historique, le Pool House, les tests bandelette, la balance de Taylor et les paramètres avancés de l’intégration Pool Pilot.
+
+La carte est pensée en priorité pour les smartphones, tout en restant utilisable sur tablette et navigateur. Les fonctions facultatives ne sont affichées que lorsqu’une entité correspondante est configurée.
 
 ## Fonctionnalités
 
-- Vue principale piscine avec température, pH, chlore et état global.
-- Contrôle de la filtration et de la pompe à chaleur.
-- Mode expert avec détails du calcul de filtration.
-- Alertes Pool Pilot avec conseils étape par étape.
-- Pool House avec stock, seuils et suivi des produits.
-- Test bandelette avec formulaire, historique et affichage visuel.
-- Balance de Taylor avec LSI, pHs, minF et interprétation.
-- Carnet d’entretien et données brutes.
-- Configuration graphique via l’éditeur Lovelace.
-- Notifications Pool Pilot depuis la carte.
-- Compatible mobile et application Home Assistant.
+- Vue d’accueil avec température de l’eau, pH, ORP ou chlore libre et état global.
+- Affichage de la dernière mesure et déclenchement facultatif d’une nouvelle analyse.
+- Panneau de contrôle de la filtration, de la pompe à chaleur, de l’électrolyseur, de l’éclairage et des auxiliaires.
+- Commande facultative d’un volet Home Assistant avec **Ouvrir / Stop / Fermer**, configurée uniquement dans la carte.
+- Alertes et recommandations avec dosage et correction prioritaire.
+- Historique sur 24 heures, 7 jours et 30 jours.
+- Barre de progression du cycle quotidien dans le Mode Expert.
+- Activation et désactivation du Mode Maintenance avec confirmation.
+- Carnet d’entretien, récapitulatifs quotidiens et filtres par type d’événement.
+- Gestion des produits et stocks du Pool House.
+- Formulaire et résultat du test bandelette.
+- Balance de Taylor et interprétation du LSI.
+- Éditeur graphique Lovelace pour sélectionner les entités.
+- Paramètres de filtration et notifications accessibles depuis la carte.
 
-## Captures
+## Aperçu
 
-| Vue piscine | Conseils alerte | Contrôles |
-|---|---|---|
-| <img src="docs/screenshots/dashboard-main.jpg" width="260"> | <img src="docs/screenshots/alert-advice.jpg" width="260"> | <img src="docs/screenshots/controls.jpg" width="260"> |
+| Accueil | Qualité de l’eau |
+|---|---|
+| <img src="docs/screenshots/dashboard-home-overview.jpg" alt="Accueil Pool Pilot" width="320"> | <img src="docs/screenshots/dashboard-home-water-quality.jpg" alt="Mesures de l’eau" width="320"> |
 
-| Test bandelette | Résultat bandelette | Balance de Taylor |
-|---|---|---|
-| <img src="docs/screenshots/strip-form.jpg" width="260"> | <img src="docs/screenshots/strip-result.jpg" width="260"> | <img src="docs/screenshots/taylor-balance.jpg" width="260"> |
+| Contrôle des équipements | Volet et auxiliaires |
+|---|---|
+| <img src="docs/screenshots/dashboard-controls-filtration-heating.jpg" alt="Filtration et chauffage" width="320"> | <img src="docs/screenshots/dashboard-controls-equipment-cover.jpg" alt="Volet et équipements" width="320"> |
 
-| Pool House | Mode expert | Notifications |
-|---|---|---|
-| <img src="docs/screenshots/pool-house.jpg" width="260"> | <img src="docs/screenshots/expert-mode.jpg" width="260"> | <img src="docs/screenshots/notifications.jpg" width="260"> |
+| Historique | Pool House |
+|---|---|
+| <img src="docs/screenshots/dashboard-history.jpg" alt="Historique Pool Pilot" width="320"> | <img src="docs/screenshots/dashboard-pool-house.jpg" alt="Pool House" width="320"> |
 
-## Installation via HACS
+| Mode Expert | Équilibre chimique |
+|---|---|
+| <img src="docs/screenshots/dashboard-expert-filtration.jpg" alt="Mode Expert filtration" width="320"> | <img src="docs/screenshots/dashboard-expert-chemistry.jpg" alt="Mode Expert chimie" width="320"> |
+
+| Test bandelette | Balance de Taylor |
+|---|---|
+| <img src="docs/screenshots/dashboard-strip-test-result.jpg" alt="Résultat bandelette" width="320"> | <img src="docs/screenshots/dashboard-taylor-balance.jpg" alt="Balance de Taylor" width="320"> |
+
+## Prérequis
+
+- Home Assistant avec les tableaux de bord Lovelace.
+- L’intégration [Pool Pilot](https://github.com/amery74/ha-poolpilot) v1.2.3 ou plus récente.
+- HACS recommandé pour l’installation et les mises à jour.
+
+## Installation avec HACS
+
+### Dépôt personnalisé
+
+Tant que le référencement officiel dans HACS n’est pas validé :
 
 1. Ouvrir **HACS**.
-2. Aller dans **Dépôts personnalisés**.
-3. Ajouter le dépôt :
+2. Aller dans **Tableaux de bord** puis **Dépôts personnalisés**.
+3. Ajouter :
 
 ```text
 https://github.com/amery74/pool-pilot-dashboard
 ```
 
-4. Choisir le type **Tableau de bord / Plugin**.
+4. Sélectionner la catégorie **Tableau de bord / Plugin**.
 5. Installer **Pool Pilot Dashboard**.
-6. Redémarrer Home Assistant ou recharger les ressources Lovelace.
-7. Ajouter une carte personnalisée dans votre tableau de bord.
+6. Recharger les ressources Lovelace ou redémarrer Home Assistant.
 
-## Exemple minimal
+HACS doit créer automatiquement la ressource :
+
+```text
+/hacsfiles/pool-pilot-dashboard/pool-pilot-dashboard-card.js
+```
+
+avec le type **Module JavaScript**.
+
+## Installation manuelle
+
+Copier `pool-pilot-dashboard-card.js` dans le dossier :
+
+```text
+/config/www/pool-pilot-dashboard/
+```
+
+puis ajouter la ressource :
+
+```text
+/local/pool-pilot-dashboard/pool-pilot-dashboard-card.js
+```
+
+Type : **Module JavaScript**.
+
+## Ajout de la carte
+
+Depuis le tableau de bord Home Assistant :
+
+1. passer en mode édition ;
+2. ajouter une carte ;
+3. rechercher **Pool Pilot Dashboard** ;
+4. sélectionner les entités dans l’éditeur graphique.
+
+Exemple minimal :
 
 ```yaml
 type: custom:pool-pilot-dashboard-card
 pool_name: Piscine
 ```
 
-La carte détecte automatiquement de nombreuses entités Pool Pilot si leurs noms suivent la configuration standard.
+L’éditeur permet ensuite d’associer les entités Pool Pilot et les équipements facultatifs.
 
-## Configuration recommandée
+## Configuration du volet
 
-Dans l’éditeur visuel de la carte, renseignez en priorité : température de l’eau, pH, chlore ou chlore estimé, switch filtration, switch filtration intelligente Pool Pilot, durée de filtration recommandée, état filtration intelligente, alertes Pool Pilot, test bandelette, carnet d’entretien, Pool House et balance de Taylor.
+Le volet ne fait pas partie de l’intégration Pool Pilot. Il est directement associé à la carte à partir de n’importe quelle entité Home Assistant du domaine `cover`.
 
-<p align="center">
-  <img src="docs/screenshots/card-editor-filtration.jpg" alt="Configuration filtration" width="300">
-  <img src="docs/screenshots/card-editor-entities.jpg" alt="Configuration entités" width="300">
-</p>
+Dans l’éditeur de la carte :
+
+- activer l’affichage du volet ;
+- sélectionner l’entité `cover` ;
+- activer éventuellement les confirmations avant ouverture ou fermeture.
+
+La carte appelle directement les services standards :
+
+- `cover.open_cover` ;
+- `cover.stop_cover` ;
+- `cover.close_cover`.
 
 ## Sections de la carte
 
-### Vue principale
+### Accueil
 
-Affiche les informations essentielles : température de l’eau, pH, chlore, dernière mesure, état d’alerte et accès aux actions rapides.
+Affiche les informations essentielles du bassin, l’état des mesures et les alertes prioritaires.
 
-### Mode expert
+### Contrôle
 
-Présente la pompe, la météo, la filtration automatique, le cycle du jour, la planification, le calcul de filtration et le facteur météo.
+Regroupe les commandes des équipements configurés. Aucun emplacement n’est affiché pour un équipement absent.
+
+### Historique
+
+Affiche les mesures disponibles sur 24 heures, 7 jours ou 30 jours.
 
 ### Pool House
 
-Permet de suivre les produits, leur stock et les recommandations d’utilisation.
+Permet de consulter et gérer les produits, quantités et niveaux de stock.
 
-### Test bandelette
+### Mode Expert
 
-Propose une saisie simple des valeurs bandelette et un affichage visuel du dernier test.
+Présente le diagnostic système, le calcul de filtration, la progression du cycle quotidien, les données chimiques et le Mode Maintenance.
 
-### Balance de Taylor
+### Test bandelette et Taylor
 
-Affiche les indicateurs d’équilibre de l’eau : TAC, TH, CYA, température, pH, pHs, minF et LSI.
+Permet de saisir les mesures manuelles et d’interpréter l’équilibre de l’eau à partir du TAC, TH, stabilisant, pH et de la température.
 
-## Ressources Lovelace
+## Paramètres
 
-HACS ajoute normalement la ressource automatiquement. Si nécessaire, ajoutez manuellement :
+Les réglages de filtration, objectifs de qualité de l’eau, seuils d’alerte et notifications sont accessibles depuis la carte lorsqu’ils sont exposés par l’intégration.
 
-```text
-/hacsfiles/pool-pilot-dashboard/pool-pilot-dashboard-card.js
-```
-
-Type : **JavaScript module**.
+<p align="center">
+  <img src="docs/screenshots/dashboard-settings-filtration.jpg" alt="Paramètres de filtration" width="300">
+  <img src="docs/screenshots/dashboard-settings-alerts.jpg" alt="Paramètres des alertes" width="300">
+</p>
 
 ## Dépannage
 
-Si la carte ne se met pas à jour après installation : vider le cache du navigateur ou de l’application mobile, vérifier la ressource Lovelace, redémarrer Home Assistant, puis vérifier les logs navigateur et Home Assistant.
+### La carte n’apparaît pas
 
-## Versions recommandées
-
-- Pool Pilot Dashboard : **v1.0.0** ou plus récent.
-- Pool Pilot : **v1.0.0** ou plus récent.
-
-## Licence
-
-Carte Lovelace personnelle pour Home Assistant et Pool Pilot.
-
-
-## Nouveautés v1.1.0 bêta
-
-- Valeur numérique du chlore libre (`X,X ppm`) ou de l’ORP (`XXX mV`) sous la jauge.
-- Sélecteur d’affichage Chlore / ORP dans l’éditeur visuel.
-- Éclairage et deux contacts auxiliaires facultatifs, configurables uniquement dans la carte.
-- Les bandeaux d’alerte ne sont plus affichés sans recommandation exploitable.
-- Les champs **Lancer une mesure** et **Dernière mesure** restent facultatifs et dépendent des entités exposées par l’appareil.
-
-
-
-## Dépannage HACS
-
-Après l’installation, HACS place physiquement les fichiers dans :
-
-```text
-/config/www/community/pool-pilot-dashboard/
-```
-
-Dans Home Assistant, ils sont servis par l’URL virtuelle :
+Vérifier dans **Paramètres → Tableaux de bord → Ressources** que l’URL suivante est présente :
 
 ```text
 /hacsfiles/pool-pilot-dashboard/pool-pilot-dashboard-card.js
 ```
 
-Ces deux chemins désignent donc le même fichier.
+Le type doit être **Module JavaScript**.
 
-En cas d’erreur **Custom element doesn't exist: pool-pilot-dashboard-card** :
+### Une ancienne version reste affichée
 
-1. Ouvrez **Paramètres → Tableaux de bord → Ressources**.
-2. Vérifiez la présence de :
-   `/hacsfiles/pool-pilot-dashboard/pool-pilot-dashboard-card.js`
-3. Le type doit être **Module JavaScript**.
-4. Si la ressource manque, ajoutez-la manuellement.
-5. Rechargez complètement le navigateur ou l’application Home Assistant.
+- recharger complètement le navigateur ;
+- fermer puis rouvrir l’application Home Assistant ;
+- vider le cache si nécessaire ;
+- vérifier que le fichier du dossier HACS correspond à la version installée.
 
-Le nom correct de la carte est :
+Le nom exact de la carte est :
 
 ```yaml
 type: custom:pool-pilot-dashboard-card
 ```
 
+## Versions
+
+- Pool Pilot Dashboard : **v1.2.3**
+- Intégration Pool Pilot recommandée : **v1.2.3** ou plus récente
+
+## Contribution et support
+
+- Problèmes et demandes : [GitHub Issues](https://github.com/amery74/pool-pilot-dashboard/issues)
+- Consignes de contribution : [CONTRIBUTING.md](CONTRIBUTING.md)
+- Support : [SUPPORT.md](SUPPORT.md)
+- Sécurité : [SECURITY.md](SECURITY.md)
+
+## Licence
+
+Pool Pilot Dashboard est distribué sous la licence indiquée dans le fichier [LICENSE](LICENSE).
