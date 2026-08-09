@@ -1,29 +1,18 @@
-# Contributing to Pool Pilot Dashboard
+# Contributing
 
-Thank you for helping improve the Pool Pilot interface.
+Thanks for your interest in contributing.
 
-## Before opening an issue
+## Issues
 
-- Search existing issues.
-- Test the latest stable card and integration versions.
-- Include the relevant card configuration with private entity names removed if necessary.
-- Use the provided issue form.
+Please include:
 
-## Development rules
+- Home Assistant version
+- Pool Pilot version
+- Pool Pilot Dashboard version, if relevant
+- Relevant logs
+- Screenshots
+- Steps to reproduce
 
-1. Fork the repository and create a focused branch.
-2. Keep new equipment and features optional.
-3. Preserve the established structure and navigation of the card.
-4. Avoid regressions on mobile and tablet layouts.
-5. Keep `pool-pilot-dashboard-card.js` and `dist/pool-pilot-dashboard-card.js` identical.
-6. Update `CHANGELOG.md` under an **Unreleased** section when appropriate.
+## Pull requests
 
-## Validation
-
-Before submitting a pull request:
-
-- run a JavaScript syntax check;
-- test the card on mobile and desktop;
-- test with missing or unavailable optional entities;
-- reload Home Assistant and check the browser console;
-- ensure HACS validation passes.
+Keep changes focused, test with a Home Assistant restart, and update `CHANGELOG.md` when relevant.
