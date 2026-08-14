@@ -8,19 +8,6 @@
 
 Elle regroupe dans une interface mobile : mesures, filtration, chauffage, alertes, conseils, carnet d’entretien, test bandelette, Pool House, balance de Taylor et paramètres avancés.
 
-### Traitements multiples — v1.3.0
-
-À partir de **v1.3.0**, la carte suit le traitement principal configuré dans Pool Pilot :
-
-- **Chlore** ;
-- **Sel / électrolyse** ;
-- **Brome** ;
-- **Oxygène actif**.
-
-Les libellés de désinfection et les recommandations affichées sont adaptés au traitement. Pour le Brome et l’Oxygène actif, la carte utilise l’ORP / RedOx. Pour le Chlore et le Sel, elle suit le mode choisi dans l’intégration (ORP ou chlore libre).
-
-La jauge RedOx affiche désormais également la **valeur numérique en mV**.
-
 ### Programmation de la filtration depuis la carte
 
 À partir de **v1.2.1-beta**, le panneau **Paramètres → Filtration** permet de piloter directement :
@@ -40,7 +27,7 @@ Les contrôles utilisent les entités `select`, `number` et `time` exposées par
 
 ## Fonctionnalités
 
-- Vue principale piscine avec température, pH, désinfection adaptée au traitement et état global.
+- Vue principale piscine avec température, pH, chlore et état global.
 - Contrôle de la filtration et de la pompe à chaleur.
 - Mode expert avec détails du calcul de filtration.
 - Alertes Pool Pilot avec conseils étape par étape.
