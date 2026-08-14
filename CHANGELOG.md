@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.1
+
+- Correctif critique : restauration de l'affichage complet de la carte après la mise à jour v1.3.0.
+- Restauration de la méthode d'affichage des équipements de la vue Analyse.
+- Correction de la détection du mode ORP / chlore libre avec la nouvelle logique multi-traitements.
+- Aucun changement de configuration requis.
+
 ## v1.3.0
 
 - Compatibilité avec l’architecture multi-traitements de Pool Pilot v1.3.0.
