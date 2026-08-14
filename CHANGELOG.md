@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.0
+
+- Compatibilité avec l’architecture multi-traitements de Pool Pilot v1.3.0.
+- Affichage du traitement principal : Chlore, Sel / électrolyse, Brome ou Oxygène actif.
+- La jauge de désinfection respecte le mode de mesure configuré par Pool Pilot.
+- Brome et Oxygène actif utilisent l’ORP / RedOx sur la carte.
+- Chlore et Sel peuvent afficher le chlore libre ou l’ORP selon la configuration.
+- Affichage numérique de la valeur RedOx / ORP directement dans la jauge.
+- Les alertes locales de la carte n’emploient plus systématiquement le mot « chlore ».
+- Les conseils de secours liés au risque d’algues sont adaptés au traitement principal.
+- Pour une piscine au sel, la carte privilégie l’électrolyseur / le mode Boost.
+- Préparation de la carte aux recommandations Brome et Oxygène actif exposées par l’intégration.
+
 ## v1.2.4
 
 - Correction de l’affichage de la consigne de désinfection dans les paramètres.
