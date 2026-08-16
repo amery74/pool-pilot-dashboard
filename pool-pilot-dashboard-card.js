@@ -3398,7 +3398,7 @@ if (!window.customCards.some((c) => c.type === "pool-pilot-dashboard-card"))
     preview: true,
   });
 console.info(
-  "%cPOOL-PILOT-DASHBOARD-CARD v1.4.3",
+  "%cPOOL-PILOT-DASHBOARD-CARD v1.4.4",
   "color:#2ed5c7;font-weight:bold",
 );
 
@@ -3506,20 +3506,60 @@ console.info(
     return "";
   };
 
+  const activePoolPilotStates = (hass) =>
+    Object.entries(hass?.states || {})
+      .map(([entity_id, state]) => ({
+        entity_id,
+        key: String(state?.attributes?.pool_pilot_key || ""),
+        instance: String(state?.attributes?.pool_pilot_instance || ""),
+      }))
+      .filter((entry) => entry.key && entry.instance);
+
+  const chooseStateInstance = (entries, userConfig) => {
+    const byEntity = new Map(entries.map((entry) => [entry.entity_id, entry]));
+    for (const field of Object.keys(ENTITY_MAP)) {
+      if (!hasValue(userConfig, field)) continue;
+      const anchored = byEntity.get(String(userConfig[field]));
+      if (anchored?.instance) return anchored.instance;
+    }
+    const instances = [...new Set(entries.map((entry) => entry.instance).filter(Boolean))];
+    if (instances.length === 1) return instances[0];
+    if (instances.length > 1) {
+      console.warn("Pool Pilot Dashboard: plusieurs instances Pool Pilot détectées.", instances);
+    }
+    return "";
+  };
+
   const resolveEntities = async (card, hass) => {
+    const userConfig = card.__poolPilotUserConfig || {};
+    const stateEntries = activePoolPilotStates(hass);
+    const instance = chooseStateInstance(stateEntries, userConfig);
+
+    if (instance) {
+      const resolved = {};
+      for (const [field, [domain, key]] of Object.entries(ENTITY_MAP)) {
+        if (hasValue(userConfig, field)) continue;
+        const match = stateEntries.find((candidate) =>
+          candidate.instance === instance &&
+          candidate.key === key &&
+          String(candidate.entity_id).split(".")[0] === domain
+        );
+        if (match?.entity_id) resolved[field] = match.entity_id;
+      }
+      if (Object.keys(resolved).length) {
+        card.config = { ...(card.config || {}), ...resolved };
+        card.__poolPilotAutoEntities = resolved;
+        console.info("Pool Pilot Dashboard v1.4.4: entités liées via hass.states", { instance, resolved });
+        return true;
+      }
+    }
+
     const registry = await loadRegistry(hass);
     const entries = activePoolPilotEntries(registry, hass);
-    const userConfig = card.__poolPilotUserConfig || {};
     const prefix = choosePrefix(entries, userConfig);
-
-    console.info(
-      "Pool Pilot Dashboard v1.4.3: auto-link scan",
-      { poolPilotEntries: entries.length, prefix: prefix || null },
-    );
-
     if (!prefix) return false;
-    const resolved = {};
 
+    const resolved = {};
     for (const [field, [domain, key]] of Object.entries(ENTITY_MAP)) {
       if (hasValue(userConfig, field)) continue;
       const entry = entries.find((candidate) =>
@@ -3529,11 +3569,9 @@ console.info(
       );
       if (entry?.entity_id) resolved[field] = entry.entity_id;
     }
-
     if (!Object.keys(resolved).length) return false;
     card.config = { ...(card.config || {}), ...resolved };
     card.__poolPilotAutoEntities = resolved;
-    console.info("Pool Pilot Dashboard v1.4.3: entités liées", resolved);
     return true;
   };
 
@@ -3572,7 +3610,7 @@ console.info(
           .catch((error) => {
             this.__poolPilotAutoLinkPending = false;
             console.warn(
-              "Pool Pilot Dashboard v1.4.3: auto-liaison indisponible, configuration manuelle conservée",
+              "Pool Pilot Dashboard v1.4.4: auto-liaison indisponible, configuration manuelle conservée",
               error,
             );
           });
@@ -3612,13 +3650,13 @@ console.info(
               if (typeof this._updateForm === "function") this._updateForm(true);
               else if (typeof this.render === "function") this.render();
               console.info(
-                "Pool Pilot Dashboard v1.4.3: entités internes affichées dans l'éditeur",
+                "Pool Pilot Dashboard v1.4.4: entités internes affichées dans l'éditeur",
                 this.__poolPilotAutoEntities || {},
               );
             })
             .catch((error) => {
               console.warn(
-                "Pool Pilot Dashboard v1.4.3: auto-liaison éditeur indisponible",
+                "Pool Pilot Dashboard v1.4.4: auto-liaison éditeur indisponible",
                 error,
               );
             });
@@ -3631,7 +3669,7 @@ console.info(
 
   Object.defineProperty(proto, "__poolPilotAutoLinkV142", { value: true });
   console.info(
-    "%cPOOL-PILOT-DASHBOARD-CARD v1.4.3 · auto-liaison interne",
+    "%cPOOL-PILOT-DASHBOARD-CARD v1.4.4 · auto-liaison interne",
     "color:#2ed5c7;font-weight:bold",
   );
 })();
