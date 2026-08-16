@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.4.2
+
+- Correction de l’auto-liaison des entités internes Pool Pilot.
+- La détection s’appuie désormais sur les entités `platform: pool_pilot` réellement présentes dans `hass.states` et sur le préfixe stable de leur `unique_id`.
+- Suppression de la dépendance obligatoire au regroupement `device_id` / `config_entry_id` pour sélectionner l’instance Pool Pilot.
+- Les entités renommées dans Home Assistant restent détectables grâce au `unique_id`.
+- Les entités externes à Pool Pilot restent configurées manuellement.
+- Une entité interne renseignée manuellement reste prioritaire et sert de point d’ancrage si plusieurs instances Pool Pilot sont présentes.
+- Ajout de journaux de diagnostic dans la console pour faciliter le contrôle de l’auto-liaison.
+
 ## v1.4.0
 
 - Liaison automatique des entités créées par l’intégration Pool Pilot via le registre d’entités Home Assistant.
