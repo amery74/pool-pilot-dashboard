@@ -3398,12 +3398,12 @@ if (!window.customCards.some((c) => c.type === "pool-pilot-dashboard-card"))
     preview: true,
   });
 console.info(
-  "%cPOOL-PILOT-DASHBOARD-CARD v1.4.0",
+  "%cPOOL-PILOT-DASHBOARD-CARD v1.4.2",
   "color:#2ed5c7;font-weight:bold",
 );
 
 
-// POOL_PILOT_AUTOLINK_V140
+// POOL_PILOT_AUTOLINK_V142
 ;(() => {
   const ENTITY_MAP = Object.freeze({
     water_temp_entity: ["sensor", "water_temperature"],
@@ -3413,9 +3413,7 @@ console.info(
     chemistry_state_entity: ["sensor", "chemistry_status"],
     bathing_state_entity: ["sensor", "bathing_status"],
     actions_entity: ["sensor", "action_summary"],
-    action_summary_entity: ["sensor", "action_summary"],
     alert_entity: ["sensor", "alert_status"],
-    alert_status_entity: ["sensor", "alert_status"],
     pool_alerts_entity: ["sensor", "pool_alerts"],
     vigilance_entity: ["sensor", "vigilance"],
     weather_factor_entity: ["sensor", "weather_factor"],
@@ -3443,101 +3441,104 @@ console.info(
     auto_end_time_entity: ["time", "auto_end_time"],
   });
 
+  const KNOWN_KEYS = [...new Set(Object.values(ENTITY_MAP).map(([, key]) => key))]
+    .sort((a, b) => b.length - a.length);
   let registryPromise;
+
   const hasValue = (obj, key) =>
     Object.prototype.hasOwnProperty.call(obj || {}, key) &&
     String(obj?.[key] ?? "").trim() !== "";
 
   const loadRegistry = (hass) => {
     if (!registryPromise) {
-      registryPromise = hass
-        .callWS({ type: "config/entity_registry/list" })
-        .catch((error) => {
-          registryPromise = undefined;
-          throw error;
-        });
+      registryPromise = hass.callWS({ type: "config/entity_registry/list" }).catch((error) => {
+        registryPromise = undefined;
+        throw error;
+      });
     }
     return registryPromise;
   };
 
-  const isPoolPilot = (entry) => {
-    if (!entry || entry.disabled_by) return false;
-    if (entry.platform) return entry.platform === "pool_pilot";
-    const uid = String(entry.unique_id || "");
-    return Object.values(ENTITY_MAP).some(([, key]) =>
-      uid.endsWith(`_${key}`),
-    );
-  };
-
-  const groupKey = (entry) => {
-    if (entry.config_entry_id) return `entry:${entry.config_entry_id}`;
-    if (entry.device_id) return `device:${entry.device_id}`;
-    const uid = String(entry.unique_id || "");
-    for (const [, key] of Object.values(ENTITY_MAP)) {
-      const suffix = `_${key}`;
-      if (uid.endsWith(suffix)) return `uid:${uid.slice(0, -suffix.length)}`;
+  const entityKey = (entry) => {
+    const uid = String(entry?.unique_id || "");
+    for (const key of KNOWN_KEYS) {
+      if (uid === key || uid.endsWith(`_${key}`)) return key;
     }
     return "";
   };
 
-  const matches = (entry, domain, key) => {
-    if (!entry?.entity_id || entry.disabled_by) return false;
-    if (String(entry.entity_id).split(".")[0] !== domain) return false;
-    const uid = String(entry.unique_id || "");
-    return uid === key || uid.endsWith(`_${key}`);
+  const entityPrefix = (entry) => {
+    const uid = String(entry?.unique_id || "");
+    const key = entityKey(entry);
+    if (!key) return "";
+    if (uid === key) return "legacy";
+    return uid.slice(0, -(key.length + 1));
   };
 
-  const chooseGroup = (entries, userConfig) => {
-    const groups = new Map();
-    for (const entry of entries.filter(isPoolPilot)) {
-      const key = groupKey(entry);
-      if (!key) continue;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(entry);
-    }
-    if (!groups.size) return null;
-
-    const anchors = new Set(
-      Object.keys(ENTITY_MAP)
-        .filter((field) => hasValue(userConfig, field))
-        .map((field) => String(userConfig[field])),
+  const activePoolPilotEntries = (registry, hass) =>
+    (Array.isArray(registry) ? registry : []).filter((entry) =>
+      entry &&
+      !entry.disabled_by &&
+      entry.platform === "pool_pilot" &&
+      entry.entity_id &&
+      hass?.states?.[entry.entity_id] &&
+      entityKey(entry)
     );
-    if (anchors.size) {
-      for (const group of groups.values()) {
-        if (group.some((entry) => anchors.has(entry.entity_id))) return group;
-      }
+
+  const choosePrefix = (entries, userConfig) => {
+    const byEntity = new Map(entries.map((entry) => [entry.entity_id, entry]));
+    for (const field of Object.keys(ENTITY_MAP)) {
+      if (!hasValue(userConfig, field)) continue;
+      const anchored = byEntity.get(String(userConfig[field]));
+      const prefix = entityPrefix(anchored);
+      if (prefix) return prefix;
     }
 
-    if (groups.size === 1) return groups.values().next().value;
-
-    console.warn(
-      "Pool Pilot Dashboard: plusieurs instances Pool Pilot détectées. " +
-        "Renseignez une entité Pool Pilot dans la carte pour choisir l'instance.",
-    );
-    return null;
+    const prefixes = [...new Set(entries.map(entityPrefix).filter(Boolean))];
+    if (prefixes.length === 1) return prefixes[0];
+    if (prefixes.length > 1) {
+      console.warn(
+        "Pool Pilot Dashboard: plusieurs instances Pool Pilot détectées. " +
+        "Renseignez une entité interne Pool Pilot pour choisir l'instance.",
+        prefixes,
+      );
+    }
+    return "";
   };
 
   const resolveEntities = async (card, hass) => {
-    const userConfig = card.__poolPilotUserConfig || {};
     const registry = await loadRegistry(hass);
-    const group = chooseGroup(Array.isArray(registry) ? registry : [], userConfig);
-    if (!group) return false;
+    const entries = activePoolPilotEntries(registry, hass);
+    const userConfig = card.__poolPilotUserConfig || {};
+    const prefix = choosePrefix(entries, userConfig);
 
+    console.info(
+      "Pool Pilot Dashboard v1.4.2: auto-link scan",
+      { poolPilotEntries: entries.length, prefix: prefix || null },
+    );
+
+    if (!prefix) return false;
     const resolved = {};
+
     for (const [field, [domain, key]] of Object.entries(ENTITY_MAP)) {
       if (hasValue(userConfig, field)) continue;
-      const entry = group.find((candidate) => matches(candidate, domain, key));
+      const entry = entries.find((candidate) =>
+        entityPrefix(candidate) === prefix &&
+        entityKey(candidate) === key &&
+        String(candidate.entity_id).split(".")[0] === domain
+      );
       if (entry?.entity_id) resolved[field] = entry.entity_id;
     }
 
     if (!Object.keys(resolved).length) return false;
     card.config = { ...(card.config || {}), ...resolved };
     card.__poolPilotAutoEntities = resolved;
+    console.info("Pool Pilot Dashboard v1.4.2: entités liées", resolved);
     return true;
   };
 
   const proto = PoolPilotDashboardCard?.prototype;
-  if (!proto || proto.__poolPilotAutoLinkV140) return;
+  if (!proto || proto.__poolPilotAutoLinkV142) return;
 
   const originalSetConfig = proto.setConfig;
   const hassDescriptor = Object.getOwnPropertyDescriptor(proto, "hass");
@@ -3556,24 +3557,22 @@ console.info(
       get: hassDescriptor.get,
       set(hass) {
         hassDescriptor.set.call(this, hass);
-        if (
-          this.__poolPilotAutoLinked ||
-          this.__poolPilotAutoLinkPending ||
-          !hass?.callWS
-        )
-          return;
+        if (this.__poolPilotAutoLinked || this.__poolPilotAutoLinkPending || !hass?.callWS) return;
 
         this.__poolPilotAutoLinkPending = true;
         resolveEntities(this, hass)
           .then((changed) => {
             this.__poolPilotAutoLinked = true;
             this.__poolPilotAutoLinkPending = false;
-            if (changed) hassDescriptor.set.call(this, hass);
+            if (changed) {
+              if (typeof this._renderPreservingScroll === "function") this._renderPreservingScroll();
+              else if (typeof this.render === "function") this.render();
+            }
           })
           .catch((error) => {
             this.__poolPilotAutoLinkPending = false;
             console.warn(
-              "Pool Pilot Dashboard: auto-liaison indisponible, configuration manuelle conservée",
+              "Pool Pilot Dashboard v1.4.2: auto-liaison indisponible, configuration manuelle conservée",
               error,
             );
           });
@@ -3581,29 +3580,9 @@ console.info(
     });
   }
 
-  const editorProto = PoolPilotDashboardEditor?.prototype;
-  if (editorProto && !editorProto.__poolPilotAutoLinkV140) {
-    const originalLabels = editorProto._labels;
-    if (typeof originalLabels === "function") {
-      editorProto._labels = function poolPilotLabels() {
-        const labels = originalLabels.call(this);
-        for (const field of Object.keys(ENTITY_MAP)) {
-          if (labels[field]) labels[field] = `${labels[field]} (auto Pool Pilot)`;
-        }
-        return labels;
-      };
-    }
-    Object.defineProperty(editorProto, "__poolPilotAutoLinkV140", {
-      value: true,
-    });
-  }
-
-  Object.defineProperty(proto, "__poolPilotAutoLinkV140", {
-    value: true,
-  });
-
+  Object.defineProperty(proto, "__poolPilotAutoLinkV142", { value: true });
   console.info(
-    "%cPOOL-PILOT-DASHBOARD-CARD v1.4.0 · auto-liaison interne",
+    "%cPOOL-PILOT-DASHBOARD-CARD v1.4.2 · auto-liaison interne",
     "color:#2ed5c7;font-weight:bold",
   );
 })();
