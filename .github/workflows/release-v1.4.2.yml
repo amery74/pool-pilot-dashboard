@@ -1,0 +1,41 @@
+name: Release v1.4.2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-v1.4.2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TARGET="788623d29173d7a12300a2c63c4e8772230ffdbe"
+          git tag -f v1.4.2 "$TARGET"
+          git push --force origin v1.4.2
+          gh release delete v1.4.2 --yes >/dev/null 2>&1 || true
+          gh release create v1.4.2 \
+            --target "$TARGET" \
+            --title "V1.4.2" \
+            --notes $'Correction de l’auto-liaison des entités internes Pool Pilot.\n\n- Détection limitée aux entités Pool Pilot réellement actives dans Home Assistant.\n- Association basée sur le préfixe stable des unique_id, même si les entity_id ont été renommés.\n- Suppression de la dépendance obligatoire au device_id/config_entry_id.\n- Les entités externes restent configurées manuellement.\n- Le choix manuel d’une entité interne reste prioritaire et sert d’ancrage en cas de plusieurs instances.\n- Ajout de diagnostics console pour vérifier la détection.'
+
+      - name: Remove temporary workflow
+        run: |
+          rm -f .github/workflows/release-v1.4.2.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: remove v1.4.2 release workflow" || exit 0
+          git push origin main
