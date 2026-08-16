@@ -1,0 +1,23 @@
+name: Release v1.4.1
+
+on:
+  push:
+    branches: [fix-v1.4-tag]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create v1.4.1 release from corrected bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.4.1 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target e7e7cb351e4603303ca035263e7582c9e78199bc \
+            --title "V1.4.1" \
+            --notes "Correctif de la v1.4.0.\n\n- Bundle HACS autonome restauré, sans import secondaire.\n- Auto-liaison des entités internes Pool Pilot conservée.\n- Les entités externes restent configurées manuellement.\n- Nouveau numéro de version pour forcer le renouvellement du cache HACS / navigateur après la v1.4.0 défectueuse."
