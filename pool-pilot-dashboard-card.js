@@ -3398,7 +3398,7 @@ if (!window.customCards.some((c) => c.type === "pool-pilot-dashboard-card"))
     preview: true,
   });
 console.info(
-  "%cPOOL-PILOT-DASHBOARD-CARD v1.4.2",
+  "%cPOOL-PILOT-DASHBOARD-CARD v1.4.3",
   "color:#2ed5c7;font-weight:bold",
 );
 
@@ -3513,7 +3513,7 @@ console.info(
     const prefix = choosePrefix(entries, userConfig);
 
     console.info(
-      "Pool Pilot Dashboard v1.4.2: auto-link scan",
+      "Pool Pilot Dashboard v1.4.3: auto-link scan",
       { poolPilotEntries: entries.length, prefix: prefix || null },
     );
 
@@ -3533,7 +3533,7 @@ console.info(
     if (!Object.keys(resolved).length) return false;
     card.config = { ...(card.config || {}), ...resolved };
     card.__poolPilotAutoEntities = resolved;
-    console.info("Pool Pilot Dashboard v1.4.2: entités liées", resolved);
+    console.info("Pool Pilot Dashboard v1.4.3: entités liées", resolved);
     return true;
   };
 
@@ -3572,7 +3572,7 @@ console.info(
           .catch((error) => {
             this.__poolPilotAutoLinkPending = false;
             console.warn(
-              "Pool Pilot Dashboard v1.4.2: auto-liaison indisponible, configuration manuelle conservée",
+              "Pool Pilot Dashboard v1.4.3: auto-liaison indisponible, configuration manuelle conservée",
               error,
             );
           });
@@ -3580,9 +3580,58 @@ console.info(
     });
   }
 
+
+
+  // POOL_PILOT_EDITOR_AUTOLINK_V143
+  const editorProto = PoolPilotDashboardEditor?.prototype;
+  if (editorProto && !editorProto.__poolPilotEditorAutoLinkV143) {
+    const editorHassDescriptor = Object.getOwnPropertyDescriptor(editorProto, "hass");
+    const editorOriginalSetConfig = editorProto.setConfig;
+
+    if (typeof editorOriginalSetConfig === "function") {
+      editorProto.setConfig = function poolPilotEditorSetConfig(config) {
+        this.__poolPilotUserConfig = { ...(config || {}) };
+        this.__poolPilotEditorAutoLinked = false;
+        return editorOriginalSetConfig.call(this, config);
+      };
+    }
+
+    if (editorHassDescriptor?.set) {
+      Object.defineProperty(editorProto, "hass", {
+        configurable: true,
+        enumerable: editorHassDescriptor.enumerable,
+        get: editorHassDescriptor.get,
+        set(hass) {
+          editorHassDescriptor.set.call(this, hass);
+          if (this.__poolPilotEditorAutoLinked || !hass?.callWS) return;
+          this.__poolPilotEditorAutoLinked = true;
+          if (!this.__poolPilotUserConfig) this.__poolPilotUserConfig = { ...(this.config || {}) };
+          resolveEntities(this, hass)
+            .then((changed) => {
+              if (!changed) return;
+              if (typeof this._updateForm === "function") this._updateForm(true);
+              else if (typeof this.render === "function") this.render();
+              console.info(
+                "Pool Pilot Dashboard v1.4.3: entités internes affichées dans l'éditeur",
+                this.__poolPilotAutoEntities || {},
+              );
+            })
+            .catch((error) => {
+              console.warn(
+                "Pool Pilot Dashboard v1.4.3: auto-liaison éditeur indisponible",
+                error,
+              );
+            });
+        },
+      });
+    }
+
+    Object.defineProperty(editorProto, "__poolPilotEditorAutoLinkV143", { value: true });
+  }
+
   Object.defineProperty(proto, "__poolPilotAutoLinkV142", { value: true });
   console.info(
-    "%cPOOL-PILOT-DASHBOARD-CARD v1.4.2 · auto-liaison interne",
+    "%cPOOL-PILOT-DASHBOARD-CARD v1.4.3 · auto-liaison interne",
     "color:#2ed5c7;font-weight:bold",
   );
 })();
