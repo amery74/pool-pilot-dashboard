@@ -23,10 +23,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag v1.4.3
           git push origin v1.4.3
-          gh release create v1.4.3 --title "V1.4.3" --notes "Correction de l’affichage de l’auto-liaison dans l’éditeur Pool Pilot Dashboard.
+          cat > /tmp/release-notes.md <<'EOF'
+          Correction de l’affichage de l’auto-liaison dans l’éditeur Pool Pilot Dashboard.
 
-- Les entités internes Pool Pilot auto-détectées sont désormais visibles directement dans l’éditeur de carte.
-- L’éditeur utilise la même logique de détection que la carte.
-- Les choix manuels restent prioritaires.
-- Les entités externes restent volontairement au choix de l’utilisateur.
-- Bundle autonome HACS conservé et validé."
+          - Les entités internes Pool Pilot auto-détectées sont désormais visibles directement dans l’éditeur de carte.
+          - L’éditeur utilise la même logique de détection que la carte.
+          - Les choix manuels restent prioritaires.
+          - Les entités externes restent volontairement au choix de l’utilisateur.
+          - Bundle autonome HACS conservé et validé.
+          EOF
+          gh release create v1.4.3 --title "V1.4.3" --notes-file /tmp/release-notes.md
