@@ -1,0 +1,24 @@
+name: Retag v1.4.0
+
+on:
+  push:
+    branches: [fix-v1.4-tag]
+
+permissions:
+  contents: write
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout corrected commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Move v1.4.0 tag to corrected commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f v1.4.0 e7e7cb351e4603303ca035263e7582c9e78199bc
+          git push --force origin refs/tags/v1.4.0
