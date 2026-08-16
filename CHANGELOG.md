@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.0
+
+- Liaison automatique des entités créées par l’intégration Pool Pilot via le registre d’entités Home Assistant.
+- Détection basée sur les `unique_id` Pool Pilot : les entités restent reconnues même si l’utilisateur les renomme dans Home Assistant.
+- Les entités externes à Pool Pilot (pompe, PAC, électrolyseur physique, volet, éclairage, auxiliaires, météo, etc.) restent configurées manuellement par l’utilisateur.
+- Une entité Pool Pilot renseignée explicitement dans la configuration de la carte reste prioritaire sur l’auto-détection.
+- En présence de plusieurs instances Pool Pilot, la carte utilise une entité Pool Pilot explicitement configurée comme point d’ancrage ; sans point d’ancrage, aucune association arbitraire n’est effectuée.
+- Auto-liaison des données d’analyse, alertes, filtration intelligente, Pool House, carnet d’entretien, bandelettes et réglages Pool Pilot.
+
 ## v1.3.2
 
 - Restauration complète du Mode Maintenance dans le Mode Expert.
