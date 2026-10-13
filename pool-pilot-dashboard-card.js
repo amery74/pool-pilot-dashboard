@@ -2647,6 +2647,7 @@ class PoolPilotDashboardCard extends HTMLElement {
         (b.onclick = (e) => {
           e.stopPropagation();
           const action = b.dataset.action || "toggle";
+          const ent = b.dataset.entity || "";
           if (action === "measure") {
             this._flashMeasureButton();
             if (ent) this._call(ent, "press");
@@ -2657,7 +2658,6 @@ class PoolPilotDashboardCard extends HTMLElement {
             const next = !active;
             localStorage.setItem(this._key("auto_active"), next ? "on" : "off");
             b.classList.toggle("on", next);
-            const ent = b.dataset.entity || "";
             let p;
             if (!ent) {
               p = this._hass.callService(
@@ -2708,7 +2708,6 @@ class PoolPilotDashboardCard extends HTMLElement {
               });
             return;
           }
-          const ent = b.dataset.entity;
           if (ent && ent === this.config.heatpump_entity) {
             const n = !this._isOn(ent);
             this._setOpt(ent, { state: n ? "auto" : "off" }, 20000);
